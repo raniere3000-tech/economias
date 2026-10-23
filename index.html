@@ -223,7 +223,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.5</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.6</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -649,7 +649,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.5';
+const VERSAO_SITE = '1.6';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -841,6 +841,7 @@ function fluxos(k){
   for (let m = 0, n = D.mats.length; m < n; m++){
     if (!k[m]) continue;
     const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0, eOrig = D.nova[m] ? o.eNova : o.eBase;
+    let ligou = false;   // a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
@@ -855,10 +856,10 @@ function fluxos(k){
       }
       const h = H[j], p = H[j - 1];
       let e = 0, out = 0;
-      if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } else o.ree[r] += Q[j]; }
+      if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; } else o.ree[r] += Q[j]; }
       else if (!h && p){ out = Q[j - 1]; o.sai[r] += out; }
       else if (h && p){ const d = Q[j] - Q[j - 1]; if (d > 0){ e = d; o.aum[r] += d; o.ligAum[r]++; } else if (d < 0){ out = -d; o.red[r] += out; } }
-      if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; }
+      if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; if (!ligou){ ligou = true; o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } }
       if (out){ o.cidS[c] += out; o.subS[s] += out; }
     }
   }
@@ -958,7 +959,7 @@ function renderResumo(){
 
   $('#kpis').innerHTML = [
     { t: 'Economias novas em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
-    { t: 'Ligações que passaram a faturar esgoto em 2026', v: mais(ligAno), d: 'novas ou já na base', c: 'destaque' },
+    { t: 'Ligações que passaram a faturar esgoto em 2026', v: mais(ligAno), d: 'as mesmas das economias novas', c: 'destaque' },
     { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `economias, em ${L} meses` },
     { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'mais economias novas' },
     { t: `Fat. esgoto das novas em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do faturamento de esgoto` },
@@ -1021,7 +1022,7 @@ function renderResumo(){
     { nome: 'Matrículas novas', valor: nf0.format(o.ligNova[i + 1]) },
     { nome: 'Acumuladas em 2026', valor: nf0.format(ligAcc[i]) }, 'sep',
     { nome: 'Economias acrescentadas em ligações que já tinham esgoto', valor: nf0.format(o.aum[i + 1]) },
-    { nome: 'Ligações que já tinham esgoto e aumentaram', valor: nf0.format(o.ligAum[i + 1]) }, 'sep',
+    { nome: 'Ligações que já tinham esgoto e aumentaram (inclui repetidas)', valor: nf0.format(o.ligAum[i + 1]) }, 'sep',
     { nome: 'Saídas (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
     { nome: 'Reentradas (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
   ] };

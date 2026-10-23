@@ -88,7 +88,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Contagem de economias (decidido na v1.3):** vale a `Qtd_eco_fat_esgoto`, a quantidade de economias que fatura esgoto de fato. Na v1.2 foi testado contar o `Eco_total` em toda ligação com AGUA E ESGOTO; o usuário achou o número muito abaixo e descartou.
 - **Economias novas no mês:** troca + aumento. O total do ano é a soma dos meses, sem desconto de saídas.
 - **Origem (como o Resumo mostra as economias novas):** o usuário não quer ver a separação "X por troca e Y por aumento". As economias novas aparecem divididas pela origem da ligação: **ligações que já estavam na base** (passaram de AGUA para AGUA E ESGOTO) e **matrículas novas já com AGUA E ESGOTO** (`nova[m]`). O aumento continua somando, no grupo da ligação. Matrícula que não aparece em dez/25 e surge em 2026 já com esgoto conta como nova.
-- **Ligações que passaram a faturar esgoto:** quantidade de matrículas que passaram a faturar esgoto, somando as que já estavam na base e as matrículas novas, contada no mês de `entra[m]`, uma vez só. Ligação que já tinha esgoto em dez/25 e aumentou economias não conta aqui (aparece na dica do gráfico como "Ligações que já tinham esgoto e aumentaram"). Antes da v1.5 o rótulo era "Ligações novas", que confundia.
+- **Ligações que passaram a faturar esgoto (regra da v1.6):** são as mesmas matrículas que somam economias novas, por troca ou por aumento. Cada uma conta uma vez no ano, no primeiro mês em que soma economias, no grupo da sua origem. Ligação que já tinha esgoto em dez/25 e aumentou economias conta (caso da decisão judicial de jul/26). Troca com `Qtd_eco_fat_esgoto` 0 não soma economias e por isso também não conta ligação naquele mês. Antes da v1.6 só contava a troca de tipo, e o usuário viu +1.419 economias com só +311 ligações.
 - **Saídas (só para conhecimento):** a troca de AGUA E ESGOTO para AGUA conta as economias do mês anterior. A redução de economias em quem continua com esgoto também entra como saída informativa.
 - **Reentrada (só para conhecimento, não soma):** a ligação voltou a ter esgoto depois de sair. Isso vale para quem já tinha entrado em 2026 e também para quem já pagava em dez/25.
 - **Faturamento de esgoto das economias novas:** é calculado por coorte, em cada mês em que a ligação continua faturando esgoto.
@@ -182,6 +182,6 @@ python tests/conferir_totais.py base_teste.xlsx           # números de referên
 
 Valores de referência com a base sintética padrão (3000 matrículas, semente 7). Desde a v1.2 o gerador inclui ligações com AGUA E ESGOTO e economias de esgoto zeradas em mar/26 e abr/26 (1 a cada 37 matrículas):
 
-**2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.456** ligações que passaram a faturar esgoto (1.314 já na base + 142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
+**2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.466** ligações que passaram a faturar esgoto (1.324 já na base + 142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
 
 Nunca suba arquivos `.xlsx` ou `.csv` para o repositório: o `.gitignore` já bloqueia, e os dados reais têm nomes de clientes.

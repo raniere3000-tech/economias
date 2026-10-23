@@ -36,6 +36,7 @@ for m in T:
     prim = min(refs.index(k) for k in T[m])
     nova = entra > 0 and entra == prim
     e_orig = e_nova if nova else e_base
+    ligou = False  # a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
     for r in range(n):
         fat_tot[r] += f[r]
         if r == 0: continue
@@ -44,13 +45,17 @@ for m in T:
             elif h[0] and q[r] > q[0] and q[r] > 0: fat_novas[r] += f[r] * (q[r] - q[0]) / q[r]
         if h[r] and not h[r - 1]:
             if r == entra:
-                nov[r] += q[r]; e_orig[r] += q[r]; lig[r] += 1
-                if nova: lig_nova[r] += 1
+                nov[r] += q[r]; e_orig[r] += q[r]
+                if q[r] > 0 and not ligou:
+                    ligou = True; lig[r] += 1; lig_nova[r] += nova
             else: ree[r] += q[r]
         elif h[r - 1] and not h[r]: sai[r] += q[r - 1]
         elif h[r] and h[r - 1]:
             d = q[r] - q[r - 1]
-            if d > 0: aum[r] += d; e_orig[r] += d; lig_aum[r] += 1
+            if d > 0:
+                aum[r] += d; e_orig[r] += d; lig_aum[r] += 1
+                if not ligou:
+                    ligou = True; lig[r] += 1; lig_nova[r] += nova
             elif d < 0: red[r] -= d
 rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][mm-1]}/{str(a)[2:]}' for a, mm in refs]
 print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
