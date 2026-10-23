@@ -72,7 +72,7 @@ print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{ro
 print('Por mês, economias acrescentadas nelas:', ' '.join(f'{rot[r]} {aum[r]:.0f}' for r in range(1, n)))
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
 
-# comparativo com as listas "Virar para Água e Esgoto": mês previsto pelo nome do arquivo, ano pela Referência
+# comparativo com as listas "Virar para Água e Esgoto": mês previsto pelo nome do arquivo
 import os, unicodedata
 NOMES = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro']
 pri = {m: next((k for k in refs if T[m].get(k)), None) for m in T}
@@ -82,7 +82,8 @@ for arq in sys.argv[2:]:
     lws = load_workbook(arq, read_only=True).worksheets[0]
     linhas = list(lws.iter_rows(values_only=True)); cab = {c: i for i, c in enumerate(linhas[0]) if c}
     mats = list(dict.fromkeys(r[cab['NUM_LIGACAO']] for r in linhas[1:] if r[0] is not None))
-    ano = linhas[1][cab['Referência']].year; alvo = (ano, mes)
+    # mês previsto: o mês do nome, procurado entre as referências de 2026 da base (o ano da planilha não é usado)
+    alvo = max(k for k in refs[1:] if k[1] == mes); ano = alvo[0]
     cat = collections.Counter()
     for m in mats:
         p = pri.get(m, 'fora') if m in T else 'fora'

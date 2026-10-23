@@ -154,6 +154,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .tab-seg td{border-bottom:1px solid #edf1f5}
 .tab-seg th.grupo{background:var(--azul);text-align:center}
 .tab-seg .mudo{color:var(--azul-claro);font-size:11px;font-weight:400}
+.tab-seg td.aviso-lista{text-align:left;color:var(--laranja-texto);background:var(--laranja-tint);white-space:normal}
 .btn-num{border:0;background:none;padding:0;font:inherit;color:var(--azul);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .btn-num:disabled{color:var(--azul-claro);text-decoration:none;cursor:default;font-weight:400}
 .tab-seg td:first-child,.tab-seg th:first-child{text-align:left;position:sticky;left:0;z-index:1;background:#fff}
@@ -234,7 +235,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.15</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.16</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -666,9 +667,9 @@ class Lista {
 function juntaListas(listas){
   const porRef = new Map();
   for (const L of listas){
-    const rk = L.ref() || L.arquivo;
+    const rk = L.mes ? 'mes' + L.mes : L.ref() || L.arquivo;
     let g = porRef.get(rk);
-    if (!g){ g = { ref: L.ref(), arquivos: [], mats: [], nomes: [], cid: [], sub: [], qe: [], et: [] }; porRef.set(rk, g); }
+    if (!g){ g = { ref: L.ref(), mes: L.mes, arquivos: [], mats: [], nomes: [], cid: [], sub: [], qe: [], et: [] }; porRef.set(rk, g); }
     g.arquivos.push(L.arquivo);
     const vistos = new Set(g.mats);
     for (const [mk, v] of L.itens){
@@ -676,7 +677,7 @@ function juntaListas(listas){
       g.mats.push(mk); g.nomes.push(v.nome); g.cid.push(v.cid); g.sub.push(v.sub); g.qe.push(v.qe); g.et.push(v.et);
     }
   }
-  return [...porRef.values()].sort((a, b) => String(a.ref).localeCompare(String(b.ref)));
+  return [...porRef.values()].sort((a, b) => (a.mes || 99) - (b.mes || 99) || String(a.ref).localeCompare(String(b.ref)));
 }
 async function processFiles(files){
   const S = new Store(), listas = [];
@@ -740,7 +741,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.15';
+const VERSAO_SITE = '1.16';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1348,17 +1349,23 @@ function fillAnMes(){
 }
 /* ---------- comparativo com as listas de virar para Água e Esgoto ---------- */
 const sitNome = s => [`Começou no mês previsto`, `Começou antes do previsto`, `Começou depois do previsto`,
-  `Já faturava em ${refLabel(D.refs[0])}`, 'Ainda não faturou esgoto', 'Não está na base'][s];
+  `Já faturava em ${refLabel(D.refs[0])}`, 'Ainda não faturou esgoto', 'Não está na base', 'Começou a faturar (mês previsto não identificado)'][s];
 function montaListas(){
   const nM = D.mats.length, idx = new Map(D.mats.map((s, i) => [s, i]));
   D.cmp = (D.listas || []).map(L => {
-    const rL = L.ref ? D.refs.indexOf(L.ref) : -1, sitMat = new Int8Array(nM).fill(-1);
+    // mês previsto: o mês do nome do arquivo, procurado entre as referências de 2026 da base (o ano da planilha
+    // pode faltar ou vir diferente); sem mês no nome, vale a Referência da lista, se estiver na base
+    const mes = L.mes || (L.ref ? +L.ref.slice(5) : 0);
+    let rL = -1;
+    for (let r = D.refs.length - 1; r >= 1; r--) if (+D.refs[r].slice(5) === mes){ rL = r; break; }
+    if (rL < 0 && L.ref) rL = D.refs.indexOf(L.ref);
+    const sitMat = new Int8Array(nM).fill(-1);
     const itens = L.mats.map((mk, i) => {
       const m = idx.has(mk) ? idx.get(mk) : -1; let sit = 5;
-      if (m >= 0){ const p = D.pri[m]; sit = p < 0 ? 4 : p === 0 ? 3 : rL < 0 || p < rL ? 1 : p === rL ? 0 : 2; sitMat[m] = sit; }
+      if (m >= 0){ const p = D.pri[m]; sit = p < 0 ? 4 : p === 0 ? 3 : rL < 0 ? 6 : p < rL ? 1 : p === rL ? 0 : 2; sitMat[m] = sit; }
       return { i, m, sit };
     });
-    return { L, rL, label: L.ref ? refLabel(L.ref) : L.arquivos[0], itens, sitMat };
+    return { L, rL, label: rL >= 0 ? refLabel(D.refs[rL]) : L.arquivos[0], itens, sitMat };
   });
   const sel = $('#cLista');
   sel.innerHTML = '<option value="">Todas as matrículas</option>' + D.cmp.map((c, i) =>
@@ -1379,11 +1386,12 @@ function renderListas(){
     <tr><th>Na lista</th><th>Começaram no mês previsto</th><th>Começaram antes</th><th>Começaram depois</th><th>Já faturavam em ${refLabel(D.refs[0])}</th><th>Ainda não faturaram</th><th>Não estão na base</th>
     <th>Na lista</th><th>Faturadas na base no mês previsto</th></tr></thead><tbody>`;
   D.cmp.forEach((c, i) => {
-    const it = itensFiltrados(c, k), cnt = [0, 0, 0, 0, 0, 0]; let ecoL = 0, ecoB = 0;
+    const it = itensFiltrados(c, k), cnt = [0, 0, 0, 0, 0, 0, 0]; let ecoL = 0, ecoB = 0;
     it.forEach(t => { cnt[t.sit]++; ecoL += c.L.qe[t.i] || 0; if (t.m >= 0 && c.rL >= 0) ecoB += D.qe[t.m * nR + c.rL]; });
     h += `<tr><td title="${esc(c.L.arquivos.join(', '))}"><b>${esc(c.label)}</b> <span class="mudo">${esc(c.L.arquivos.join(', '))}</span></td><td class="tot">${nf0.format(it.length)}</td>` +
       [0, 1, 2, 3, 4].map(s => `<td>${btn(cnt[s], i + ':' + s)}</td>`).join('') + `<td class="info">${nf0.format(cnt[5])}</td>` +
       `<td>${nf0.format(ecoL)}</td><td>${c.rL >= 0 ? nf0.format(ecoB) : '–'}</td></tr>`;
+    if (c.rL < 0) h += `<tr><td colspan="10" class="aviso-lista">⚠ Não foi possível identificar o mês previsto de “${esc(c.L.arquivos.join(', '))}” na base: ${nf0.format(cnt[6])} matrículas começaram a faturar esgoto, mas ficam sem comparação. Coloque o nome do mês no nome do arquivo (ex.: “Julho - Virar para Água e Esgoto”).</td></tr>`;
   });
   $('#tblListas').innerHTML = h + '</tbody></table>';
 }
