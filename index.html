@@ -75,6 +75,8 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .card h2{font-size:14px;font-weight:600;margin:0 0 2px;color:var(--marinho);letter-spacing:-.005em}
 .nota-secao{margin:0 0 8px;color:var(--azul-claro);font-size:12px;line-height:1.4}
 .card-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 16px;flex-wrap:wrap}
+.card-topo > div:first-child{flex:1 1 320px;min-width:0}
+.card-topo > .toggle,.card-topo > .card-acoes,.card-topo > .legenda{flex:0 0 auto}
 .card-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--azul-claro)}
 .legenda i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
@@ -227,7 +229,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.10</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.11</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -664,7 +666,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.10';
+const VERSAO_SITE = '1.11';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -870,7 +872,8 @@ function fluxos(k){
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
-      if (P[j]){ o.fatTot[r] += F[j]; o.ecoTot[r] += Q[j]; if (H[j]) o.ligTot[r]++; }
+      if (P[j]) o.fatTot[r] += F[j];
+      if (H[j] && Q[j] > 0){ o.ecoTot[r] += Q[j]; o.ligTot[r]++; }   // faturando esgoto: AGUA E ESGOTO com economias de esgoto faturadas
       if (D.div[j]) o.divMat[r]++;
       if (!r) continue;
       if (H[j]){

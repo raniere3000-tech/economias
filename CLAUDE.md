@@ -96,6 +96,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Faturamento de esgoto das economias novas:** é calculado por coorte, em cada mês em que a ligação continua faturando esgoto.
   - Ligação que entrou por troca: conta o `Faturamento_bruto_direta_esgoto` inteiro, de `entra[m]` em diante.
   - Ligação que já pagava em dez/25 e aumentou economias: conta só a parte proporcional, `fe * (qe_atual − qe_dez) / qe_atual`, quando `qe_atual > qe_dez`.
+- **Faturando esgoto na base (v1.11):** a matrícula conta como faturando esgoto num mês quando o `TIPO_FATURAMENTO` tem ESGOTO **e** a `Qtd_eco_fat_esgoto` é maior que 0. Vale para "matrículas faturando esgoto na base" e "economias faturando esgoto na base" (dez/25 na linha do tempo) e para "Economias com esgoto faturadas" no gráfico de faturamento (`o.ligTot`, `o.ecoTot`).
 - **Faturamento existente:** faturamento de esgoto total do mês menos o faturamento das economias novas.
 - **Divergências:** aparecem numa linha discreta no Consolidado (desde a v1.7; no Resumo o usuário achou grande demais), contadas por ligação no último mês, com o link "Ver só as divergentes" que aplica o filtro.
 
@@ -195,6 +196,6 @@ python tests/conferir_totais.py base_teste.xlsx           # números de referên
 
 Valores de referência com a base sintética padrão (3000 matrículas, semente 7). Desde a v1.2 o gerador inclui ligações com AGUA E ESGOTO e economias de esgoto zeradas em mar/26 e abr/26 (1 a cada 37 matrículas):
 
-**2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.466** ligações que passaram a faturar esgoto (1.324 já na base + 142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
+Base em dez/25: **154** matrículas e **245** economias faturando esgoto. **2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.466** ligações que passaram a faturar esgoto (1.324 já na base + 142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
 
 Nunca suba arquivos `.xlsx` ou `.csv` para o repositório: o `.gitignore` já bloqueia, e os dados reais têm nomes de clientes.
