@@ -235,7 +235,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.17</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.18</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -272,7 +272,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <ol>
       <li>Clique em 📁 Conectar pasta e escolha a pasta com os arquivos .xlsx. Nas próximas vezes, é só clicar em ↻ Atualizar.</li>
       <li>Também dá para usar 📄 Carregar arquivo com um único .xlsx que tenha todas as abas.</li>
-      <li>Cada aba precisa ter NUM_LIGACAO, Referência, ULTIMO_CONTRATO, TIPO_FATURAMENTO e as colunas de faturamento e economias. Só as linhas com ULTIMO_CONTRATO = SIM entram.</li>
+      <li>Cada aba precisa ter NUM_LIGACAO, Referência, ULTIMO_CONTRATO, TIPO_FATURAMENTO e as colunas de faturamento e economias. Entram todos os contratos da matrícula; quando há mais de uma linha da mesma matrícula no mesmo mês, vale a do último contrato.</li>
     </ol>
     <div class="drop" id="drop">Arraste os arquivos .xlsx para cá</div>
   </section>
@@ -558,28 +558,32 @@ class Store {
     this.rMat = new G(Int32Array, 1 << 20); this.rRef = new G(Uint16Array, 1 << 20); this.rGrp = new G(Int32Array, 1 << 20); this.rTipo = new G(Uint16Array, 1 << 20);
     this.rFa = new G(Float64Array, 1 << 20); this.rFe = new G(Float64Array, 1 << 20);
     this.rQa = new G(Int32Array, 1 << 20); this.rQe = new G(Int32Array, 1 << 20); this.rEt = new G(Int32Array, 1 << 20);
-    this.stats = { linhas: 0, naoUltimo: 0, semRef: 0, abas: [], ignoradas: [] };
+    this.rUlt = new G(Uint8Array, 1 << 20); this.lastUlt = new G(Uint8Array);
+    this.stats = { linhas: 0, naoUltimo: 0, repetidas: 0, semRef: 0, abas: [], ignoradas: [] };
   }
   add(c, h){
     const mv = c[h.mat]; if (mv == null || mv === '') return;
-    if (h.ult !== undefined && norm(c[h.ult]) !== 'SIM'){ this.stats.naoUltimo++; return; }
+    // todos os contratos entram (troca de titularidade mantém a matrícula); a linha guarda se é do último contrato
+    const ult = h.ult === undefined || norm(c[h.ult]) === 'SIM' ? 1 : 0;
+    if (!ult) this.stats.naoUltimo++;
     const rk = refKey(c[h.ref]); if (!rk){ this.stats.semRef++; return; }
     const mk = typeof mv === 'number' ? String(Math.round(mv)) : String(mv).trim();
     let mi = this.matIdx.get(mk);
     if (mi === undefined){
       mi = this.mats.length; this.matIdx.set(mk, mi); this.mats.push(mk); this.nomes.push('');
-      this.cid.push(0); this.sub.push(0); this.sl.push(0); this.sc.push(0); this.last.push(-1);
+      this.cid.push(0); this.sub.push(0); this.sl.push(0); this.sc.push(0); this.last.push(-1); this.lastUlt.push(0);
     }
     const rnum = +rk.replace('-', '');
-    if (rnum >= this.last.a[mi]){
-      this.last.a[mi] = rnum;
+    // cadastro da referência mais recente; no mesmo mês, o do último contrato
+    if (rnum > this.last.a[mi] || (rnum === this.last.a[mi] && ult >= this.lastUlt.a[mi])){
+      this.last.a[mi] = rnum; this.lastUlt.a[mi] = ult;
       this.nomes[mi] = str(c[h.nome]);
       this.cid.a[mi] = this.d.cid.id(str(c[h.cid])); this.sub.a[mi] = this.d.sub.id(str(c[h.sub]));
       this.sl.a[mi] = this.d.sl.id(str(c[h.sl])); this.sc.a[mi] = this.d.sc.id(str(c[h.sc]));
     }
     let ri = this.refMap.get(rk); if (ri === undefined){ ri = this.refMap.size; this.refMap.set(rk, ri); }
     const g = c[h.grp];
-    this.rMat.push(mi); this.rRef.push(ri);
+    this.rMat.push(mi); this.rRef.push(ri); this.rUlt.push(ult);
     this.rGrp.push(g == null || g === '' ? -1 : Math.round(toNum(g)));
     this.rTipo.push(this.d.tipo.id(str(c[h.tipo])));
     this.rFa.push(toNum(c[h.fa])); this.rFe.push(toNum(c[h.fe]));
@@ -591,18 +595,23 @@ class Store {
     const remap = new Uint16Array(refs.length); refs.forEach((k, i) => { remap[this.refMap.get(k)] = i; });
     const nM = this.mats.length, nR = refs.length, N = nM * nR;
     const present = new Uint8Array(N), grp = new Int32Array(N).fill(-1), tipo = new Uint16Array(N);
-    const fa = new Float64Array(N), fe = new Float64Array(N), qa = new Int32Array(N), qe = new Int32Array(N), et = new Int32Array(N);
-    const n = this.rMat.n, A = this.rMat.a, R = this.rRef.a;
+    const fa = new Float64Array(N), fe = new Float64Array(N), qa = new Int32Array(N), qe = new Int32Array(N), et = new Int32Array(N), ult = new Uint8Array(N);
+    const n = this.rMat.n, A = this.rMat.a, R = this.rRef.a, U = this.rUlt.a, QE = this.rQe.a;
     for (let i = 0; i < n; i++){
       const j = A[i] * nR + remap[R[i]];
-      present[j] = 1; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i];
+      // uma linha por matrícula e mês: vale a do último contrato; entre contratos iguais, a de mais economias de esgoto
+      if (present[j]){
+        this.stats.repetidas++;
+        if (U[i] < ult[j] || (U[i] === ult[j] && QE[i] < qe[j])) continue;
+      }
+      present[j] = 1; ult[j] = U[i]; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i];
       fa[j] = this.rFa.a[i]; fe[j] = this.rFe.a[i]; qa[j] = this.rQa.a[i]; qe[j] = this.rQe.a[i]; et[j] = this.rEt.a[i];
     }
     return {
       refs, mats: this.mats, nomes: this.nomes,
       cid: this.cid.out(), sub: this.sub.out(), sl: this.sl.out(), sc: this.sc.out(),
       dict: { cid: this.d.cid.list, sub: this.d.sub.list, sl: this.d.sl.list, sc: this.d.sc.list, tipo: this.d.tipo.list },
-      present, grp, tipo, fa, fe, qa, qe, et, stats: this.stats
+      present, grp, tipo, fa, fe, qa, qe, et, ult, stats: this.stats
     };
   }
 }
@@ -648,7 +657,6 @@ class Lista {
   }
   add(c, h){
     const mv = c[h.mat]; if (mv == null || mv === '') return;
-    if (h.ult !== undefined && norm(c[h.ult]) !== 'SIM') return;
     const mk = typeof mv === 'number' ? String(Math.round(mv)) : String(mv).trim();
     const rk = h.ref !== undefined ? refKey(c[h.ref]) : null;
     if (rk) this.refs.set(rk, (this.refs.get(rk) || 0) + 1);
@@ -728,7 +736,7 @@ async function processFiles(files){
 self.onmessage = async ev => {
   try {
     const d = await processFiles(ev.data.files);
-    const tr = [d.cid, d.sub, d.sl, d.sc, d.present, d.grp, d.tipo, d.fa, d.fe, d.qa, d.qe, d.et].map(a => a.buffer);
+    const tr = [d.cid, d.sub, d.sl, d.sc, d.present, d.grp, d.tipo, d.fa, d.fe, d.qa, d.qe, d.et, d.ult].map(a => a.buffer);
     self.postMessage({ type: 'done', data: d }, tr);
   } catch (err){
     self.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
@@ -741,7 +749,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.17';
+const VERSAO_SITE = '1.18';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1172,8 +1180,9 @@ function renderResumo(){
                     : 'Economias novas faturando esgoto em cada mês e o total do ano. As que deixaram de faturar aparecem só para conhecimento.';
   $('#lCid').textContent = txt + ' Escolha as cidades em "Cidades na tabela" e clique nos títulos para ordenar.'; $('#lSub').textContent = txt + ' O seletor Economias / Faturamento fica no quadro por cidade.';
   const s = D.stats;
-  $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas com ULTIMO_CONTRATO = SIM em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}; ` +
-    `${nf0.format(s.naoUltimo)} linhas de contratos anteriores desconsideradas. Economias novas faturando: Qtd_eco_fat_esgoto que passou a faturar em 2026, ` +
+  $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}, com todos os contratos ` +
+    `(${nf0.format(s.naoUltimo)} linhas de contratos anteriores, por troca de titularidade). Cada matrícula conta uma vez por mês: ` +
+    `${nf0.format(s.repetidas || 0)} linhas repetidas da mesma matrícula no mesmo mês ficaram de fora, valendo a do último contrato. Economias novas faturando: Qtd_eco_fat_esgoto que passou a faturar em 2026, ` +
     `quando a matrícula passa a ter economias de esgoto faturadas (o TIPO_FATURAMENTO é o atual e não entra na conta) ou fatura mais economias de esgoto. Matrículas novas faturando: as matrículas dessas economias, ` +
     `uma vez cada, no primeiro mês. Separação por origem: já existiam na base, ou novas faturando de matrículas que aparecem pela primeira vez em 2026 já faturando esgoto. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
@@ -1256,7 +1265,7 @@ function consList(){
 function cellVal(f, j, forCsv){
   if (!D.present[j]) return '';
   switch (f){
-    case 'ult': return 'SIM';
+    case 'ult': return !D.ult || D.ult[j] ? 'SIM' : 'NÃO';
     case 'grp': return D.grp[j] < 0 ? '' : String(D.grp[j]);
     case 'tipo': return D.dict.tipo[D.tipo[j]];
     case 'fa': case 'fe': { const v = D[f][j]; return forCsv ? v.toFixed(2).replace('.', ',') : (v ? nf2.format(v) : ''); }

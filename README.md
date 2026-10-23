@@ -21,4 +21,4 @@ Os arquivos são lidos só no seu computador. Nenhum dado é enviado para a inte
 
 NUM_LIGACAO, NOM_CLIENTE, CIDADE, SUB_CATEGORIA, SIT_LIG, SIT_CONTRATO, Referência, ULTIMO_CONTRATO, COD_GRUPO, TIPO_FATURAMENTO, Faturamento_bruto_direta_agua, Faturamento_bruto_direta_esgoto, Qtd_eco_fat_agua, Qtd_eco_fat_esgoto, Eco_total.
 
-Só entram as linhas com ULTIMO_CONTRATO = SIM. Abas sem a coluna NUM_LIGACAO são ignoradas.
+Entram todos os contratos da matrícula, inclusive os anteriores a uma troca de titularidade. Cada matrícula conta uma vez por mês: se houver mais de uma linha dela no mesmo mês, vale a do último contrato (ULTIMO_CONTRATO = SIM). Abas sem a coluna NUM_LIGACAO são ignoradas.

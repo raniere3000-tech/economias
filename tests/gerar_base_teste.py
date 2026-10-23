@@ -2,7 +2,8 @@
 Uso: python tests/gerar_base_teste.py [quantidade_de_matriculas] [arquivo_saida]
 Inclui ligações novas, saídas, contratos anteriores (ULTIMO_CONTRATO = NÃO) e divergências entre
 Qtd_eco_fat_esgoto e Eco_total, e ligações com AGUA E ESGOTO sem economias de esgoto faturadas (exceção de
-faturamento) em mar/26 e abr/26, para exercitar todas as regras do painel."""
+faturamento) em mar/26 e abr/26, e trocas de titularidade (contrato anterior com ULTIMO_CONTRATO = NÃO até fev/26,
+novo contrato a partir de mar/26), para exercitar todas as regras do painel."""
 import sys
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 SAIDA = sys.argv[2] if len(sys.argv) > 2 else 'base_teste.xlsx'
@@ -16,11 +17,12 @@ abas=[('Dezembro 2025 a Fevereiro 2026',refs[0:3]),('Março 2026 a Maio 2026',re
 hdr=['NUM_LIGACAO','NOM_CLIENTE','CIDADE','SUB_CATEGORIA','SIT_LIG','SIT_CONTRATO','Referência','ULTIMO_CONTRATO','COD_GRUPO','TIPO_FATURAMENTO','Faturamento_bruto_direta_agua','Faturamento_bruto_direta_esgoto','Qtd_eco_fat_agua','Qtd_eco_fat_esgoto','Eco_total']
 mats=[]
 for i in range(N):
+    tit = i % 41 == 0  # troca de titularidade em mar/26: antes disso só há linhas do contrato anterior (NÃO)
     exc = i % 37 == 0  # exceção de faturamento: AGUA E ESGOTO com Qtd_eco_fat_esgoto 0 em mar/26 e abr/26 (sem sorteio, para não mudar o restante)
     eco=random.choice([1,1,1,2,3])
     start=random.choice([None]*6+list(range(0,10)))  # mes em que passa a ter esgoto
     stop=random.choice([None]*15+list(range(3,10)))
-    mats.append(dict(n=100607450+i,nome=f'CLIENTE {i} & CIA',cid=random.choice(cidades),sub=random.choice(subs),eco=eco,start=start,stop=stop,grp=random.choice([511,512,513]),nasce=random.choice([0]*12+[2,5,7]),div=random.random()<0.03,exc=exc))
+    mats.append(dict(n=100607450+i,nome=f'CLIENTE {i} & CIA',cid=random.choice(cidades),sub=random.choice(subs),eco=eco,start=start,stop=stop,grp=random.choice([511,512,513]),nasce=random.choice([0]*12+[2,5,7]),div=random.random()<0.03,exc=exc,tit=tit))
 wb=Workbook(write_only=True)
 for nome,rs in abas:
     ws=wb.create_sheet(nome); ws.append(hdr)
@@ -34,6 +36,7 @@ for nome,rs in abas:
             if esg and m['exc'] and k in (3,4): qe=0
             if random.random()<0.02:
                 ws.append([m['n'],m['nome'],m['cid'],m['sub'],'ATIVA','ENCERRADO',r,'NÃO',m['grp'],'AGUA',10,0,1,0,1])
-            ws.append([m['n'],m['nome'],m['cid'],m['sub'],'ATIVA','ATIVO',r,'SIM',m['grp'],'AGUA E ESGOTO' if esg else 'AGUA',fa,round(fa*0.8,2) if esg else None,m['eco'],qe,m['eco']])
+            ult='NÃO' if m['tit'] and k<3 else 'SIM'
+            ws.append([m['n'],m['nome'] if ult=='SIM' else m['nome']+' (ANTERIOR)',m['cid'],m['sub'],'ATIVA','ATIVO' if ult=='SIM' else 'ENCERRADO',r,ult,m['grp'],'AGUA E ESGOTO' if esg else 'AGUA',fa,round(fa*0.8,2) if esg else None,m['eco'],qe,m['eco']])
 wb.save(SAIDA)
 print('ok')
