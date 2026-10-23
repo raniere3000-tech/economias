@@ -227,7 +227,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.8</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.9</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -664,7 +664,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.8';
+const VERSAO_SITE = '1.9';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1019,7 +1019,7 @@ function renderResumo(){
   const ltCol = (cls, mes, topo, extra) => `<div class="lt-col ${cls}"><div class="lt-marco"><i></i></div>` +
     `<div class="lt-topo"><p class="lt-mes">${mes}</p>${topo}</div><div>${extra ? '<div class="lt-sep"></div>' + extra : ''}</div></div>`;
   const ltVal = (v, rot, det) => `<p class="lt-val">${v}</p><p class="lt-rot">${rot}</p>${det ? `<p class="lt-det">${det}</p>` : ''}`;
-  const ltParte = (ex, nv, oque) => `${nf0.format(ex)} já existiam na base<br>${nf0.format(nv)} ${oque} novas na base`;
+  const ltParte = (ex, nv, oque) => `${nf0.format(ex)} já existiam na base<br>${nf0.format(nv)} ${oque} novas faturando`;
   const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
   const LT = {
     eco: { nota: 'Economias novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as novas na base. No fim, o total do ano.',

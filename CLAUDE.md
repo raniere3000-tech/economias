@@ -102,7 +102,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 ## Vocabulário da interface (definido na v1.8)
 
 - **"Novas" é sempre "novas faturando":** as economias e matrículas não são necessariamente novas na base, e sim novas faturando esgoto. Use "economias novas faturando esgoto" e "matrículas novas faturando esgoto", em indicadores, gráficos, linha do tempo e tabelas.
-- **Não misture economias com matrículas no mesmo texto.** A divisão de origem é dita na própria unidade: "X já existiam na base" e "Y economias novas na base" (ou "Y matrículas novas na base"). Nos gráficos e legendas: "Já existiam na base" e "Novas na base".
+- **Não misture economias com matrículas no mesmo texto.** A divisão de origem é dita na própria unidade. Na linha do tempo (v1.9, pedido do usuário): "X já existiam na base" e "Y economias novas faturando" (ou "Y matrículas novas faturando"). Nos gráficos, tabelas e legendas continua "Já existiam na base" e "Novas na base".
 - **Faturamento:** "economias que já faturavam" e "economias novas faturando em 2026".
 - **Saídas:** "economias que deixaram de faturar" (só para conhecimento) e "economias que voltaram a faturar" (não somadas).
 - **"Ligação" não aparece no Resumo;** a unidade de contagem é a matrícula.
