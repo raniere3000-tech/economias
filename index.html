@@ -188,6 +188,16 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .inicio ol{padding-left:20px}
 .drop{margin-top:18px;border:2px dashed var(--linha);border-radius:10px;padding:24px;text-align:center;color:var(--azul-claro)}
 .drop.over{border-color:var(--azul);background:var(--tint)}
+.bloco svg{cursor:crosshair}
+.dica{position:fixed;z-index:70;pointer-events:none;background:#fff;border:1px solid var(--linha);border-radius:8px;box-shadow:0 8px 24px rgba(17,42,66,.16);padding:8px 12px;font-size:12px;line-height:1.45;min-width:200px;max-width:320px;font-variant-numeric:tabular-nums}
+.dica b.mes{display:block;font-size:12.5px;color:var(--marinho);margin-bottom:4px}
+.dica .lin{display:flex;justify-content:space-between;gap:14px;color:#334155}
+.dica .lin span:last-child{font-family:var(--fonte-cond);font-weight:600;color:var(--preto)}
+.dica .lin i{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:0}
+.dica .lin.forte span{font-weight:700;color:var(--marinho)}
+.dica .lin.neg span:last-child{color:var(--laranja-texto)}
+.dica .lin.mudo{color:var(--azul-claro)}
+.dica hr{border:0;border-top:1px solid var(--linha);margin:4px 0}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--marinho);color:#fff;padding:10px 18px;border-radius:8px;z-index:60;font-size:13px;max-width:90vw}
 .rodape{color:var(--azul-claro);font-size:11.5px;margin:12px 2px 0;line-height:1.45}
 @media (prefers-reduced-motion: reduce){.barra-fill{transition:none}}
@@ -207,7 +217,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.3</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.4</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -633,7 +643,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.3';
+const VERSAO_SITE = '1.4';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -876,13 +886,14 @@ function graficoAlinhado(labels, series, opts){
     g += `<line x1="${GLBL}" x2="${GW}" y1="${y(t)}" y2="${y(t)}" stroke="${t ? '#e8eef3' : '#c9d6e2'}"/>`;
     g += `<text x="${GLBL - 12}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="#64748b" font-family="IBM Plex Sans Condensed, Segoe UI, Arial">${compacto(t, opts.money)}</text>`;
   });
+  g += `<rect class="realce" x="${GLBL}" y="${topo - 22}" width="${colW}" height="${H - topo + 22 - base}" fill="#e7f0f6" visibility="hidden"/>`;
   labels.forEach((l, i) => {
     const x = GLBL + colW * i + colW / 2; let acc = 0;
     const partes = series.filter(s => (s.values[i] || 0) > 0).length;
     series.forEach(s => {
       const v = s.values[i] || 0; if (v <= 0) return;
       const y1 = y(acc + v), h = y(acc) - y1;
-      g += `<rect x="${x - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(1, h)}" fill="${s.cor}"><title>${esc(`${l}: ${s.nome} ${opts.fmtIn(v)}`)}</title></rect>`;
+      g += `<rect x="${x - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(1, h)}" fill="${s.cor}"/>`;
       if (partes > 1 && h >= 17) g += `<text x="${x}" y="${y1 + h / 2 + 4}" text-anchor="middle" font-size="11" font-weight="600" fill="${s.corTexto}" font-family="IBM Plex Sans Condensed, Segoe UI, Arial">${esc(opts.fmtIn(v))}</text>`;
       acc += v;
     });
@@ -890,6 +901,33 @@ function graficoAlinhado(labels, series, opts){
   });
   return `<svg viewBox="0 0 ${GW} ${H}" role="img" aria-label="${esc(opts.aria)}">${g}</svg>`;
 }
+// Dica ao passar o mouse (ou tocar) numa coluna: el.dica = { n, linhas: i => [{ nome, valor, cor?, cls? } | 'sep'], titulo: i => texto }
+const dicaEl = document.createElement('div'); dicaEl.className = 'dica'; dicaEl.hidden = true; dicaEl.setAttribute('role', 'tooltip'); document.body.appendChild(dicaEl);
+function escondeDica(el){
+  dicaEl.hidden = true;
+  const r = el && el.querySelector('.realce'); if (r) r.setAttribute('visibility', 'hidden');
+}
+function ligaDica(el){
+  const move = e => {
+    const svg = el.querySelector('svg'), d = el.dica;
+    if (!svg || !d || !svg.contains(e.target)){ escondeDica(el); return; }
+    const box = svg.getBoundingClientRect(), colW = (GW - GLBL) / d.n;
+    const i = Math.floor(((e.clientX - box.left) / box.width * GW - GLBL) / colW);
+    if (i < 0 || i >= d.n){ escondeDica(el); return; }
+    const r = svg.querySelector('.realce'); r.setAttribute('x', GLBL + colW * i); r.setAttribute('visibility', 'visible');
+    dicaEl.innerHTML = `<b class="mes">${esc(d.titulo(i))}</b>` + d.linhas(i).map(x => x === 'sep' ? '<hr>' :
+      `<div class="lin ${x.cls || ''}"><span>${x.cor ? `<i style="background:${x.cor}"></i>` : ''}${esc(x.nome)}</span><span>${esc(x.valor)}</span></div>`).join('');
+    dicaEl.hidden = false;
+    const w = dicaEl.offsetWidth, h = dicaEl.offsetHeight;
+    let left = e.clientX + 16, top = e.clientY - h / 2;
+    if (left + w > innerWidth - 8) left = e.clientX - w - 16;
+    dicaEl.style.left = Math.max(8, left) + 'px'; dicaEl.style.top = Math.max(8, Math.min(top, innerHeight - h - 8)) + 'px';
+  };
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerdown', move);
+  el.addEventListener('pointerleave', () => escondeDica(el));
+}
+addEventListener('scroll', () => { if (!dicaEl.hidden) document.querySelectorAll('.bloco').forEach(escondeDica); }, { passive: true });
 function tabelaAlinhada(labels, rows){
   return `<table class="tab-alinhada"><colgroup><col class="rot">${labels.map(() => '<col>').join('')}</colgroup>` +
     `<thead><tr><th></th>${labels.map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>` +
@@ -960,6 +998,19 @@ function renderResumo(){
       ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[r])) + ltK('Deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg') + '</div>';
   }).join('');
 
+  const saiA = L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]);
+  let accL2 = 0; const ligAcc = L1.map((_, i) => (accL2 += o.lig[i + 1]));
+  $('#blocoEco').dica = { n: L1.length, titulo: i => L1[i], linhas: i => [
+    { nome: 'Ligações que já estavam na base', valor: nf0.format(o.eBase[i + 1]), cor: '#102840' },
+    { nome: 'Matrículas novas', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
+    { nome: 'Economias novas no mês', valor: mais(entA[i]), cls: 'forte' },
+    { nome: 'Acumulado em 2026', valor: nf0.format(accA[i]) }, 'sep',
+    { nome: 'Ligações novas no mês', valor: mais(o.lig[i + 1]), cls: 'forte' },
+    { nome: 'Ligações acumuladas', valor: nf0.format(ligAcc[i]) }, 'sep',
+    { nome: 'Saídas (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
+    { nome: 'Reentradas (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
+  ] };
+
   // faturamento de esgoto por mês: existente + novas
   const exist = labels.map((_, r) => Math.max(0, o.fatTot[r] - o.fatNovas[r])), novas = [...o.fatNovas];
   $('#blocoFat').innerHTML = graficoAlinhado(labels, [
@@ -973,6 +1024,14 @@ function renderResumo(){
     { nome: 'Participação das novas', vals: labels.map((_, r) => o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0), fmt: v => nf1.format(v) + '%' },
     { nome: 'Economias com esgoto faturadas', cls: 'mudo', vals: [...o.ecoTot], fmt: v => nf0.format(v) }
   ]);
+
+  $('#blocoFat').dica = { n: labels.length, titulo: i => labels[i], linhas: r => [
+    { nome: 'Economias que já existiam', valor: brl0.format(exist[r]), cor: '#BCD0E1' },
+    { nome: 'Economias novas de 2026', valor: brl0.format(novas[r]), cor: '#102840' },
+    { nome: 'Faturamento de esgoto total', valor: brl0.format(o.fatTot[r]), cls: 'forte' },
+    { nome: 'Participação das novas', valor: nf1.format(o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0) + '%' }, 'sep',
+    { nome: 'Economias com esgoto faturadas', valor: nf0.format(o.ecoTot[r]), cls: 'mudo' }
+  ] };
 
   const money = st.metric === 'fat';
   segTable($('#tblCid'), o.cidUsed, D.dict.cid, money ? o.cidF : o.cidE, o.cidS, money, 'Cidade', 'sortCid');
@@ -1205,6 +1264,7 @@ $('#btnClear').onclick = async () => {
   location.reload();
 };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
 document.querySelectorAll('[data-metric]').forEach(b => b.onclick = () => {
   st.metric = b.dataset.metric;
   document.querySelectorAll('[data-metric]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });

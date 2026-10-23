@@ -133,6 +133,7 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - colunas empilhadas pela origem: ligações que já estavam na base em marinho e matrículas novas já com AGUA E ESGOTO em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
    - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações novas no mês, ligações acumuladas, saídas e reentradas.
+   - **Interativo:** ao passar o mouse (ou tocar) numa coluna, ela fica destacada e uma dica mostra os dados do mês: as duas origens, economias novas, acumulado, ligações novas e acumuladas, saídas e reentradas. O mesmo vale para o gráfico de faturamento (existente, novas, total, participação e economias com esgoto). A dica é montada por `ligaDica(el)` a partir de `el.dica = { n, titulo, linhas }`, definido em `renderResumo()`.
    - O alinhamento funciona porque o SVG tem `viewBox` de 1000 de largura e área de rótulos de 180, enquanto a tabela usa `table-layout: fixed` com a primeira coluna em 18%. As demais colunas têm larguras iguais nos dois.
 5. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
 6. **Tabelas Por cidade e Por sub-categoria:**
