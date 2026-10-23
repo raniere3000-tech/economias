@@ -1,10 +1,13 @@
 """Recalcula em Python, de forma independente, os números do Resumo do painel.
-Uso: python tests/conferir_totais.py base_teste.xlsx
+Uso: python tests/conferir_totais.py base_teste.xlsx [total|esgoto]
+  total  (padrão): em ligações com AGUA E ESGOTO conta o Eco_total, mesmo com Qtd_eco_fat_esgoto 0
+  esgoto: conta a Qtd_eco_fat_esgoto como veio
 Compare a saída com os indicadores e as tabelas do painel (mesmas regras do index.html)."""
 import sys, collections
 from openpyxl import load_workbook
 
 arq = sys.argv[1] if len(sys.argv) > 1 else 'base_teste.xlsx'
+cont = sys.argv[2] if len(sys.argv) > 2 else 'total'
 wb = load_workbook(arq, read_only=True)
 T, Q, F = (collections.defaultdict(dict) for _ in range(3))
 refs = set()
@@ -20,7 +23,8 @@ for ws in wb.worksheets:
             continue
         d = g('Referência'); k = (d.year, d.month); refs.add(k); m = g('NUM_LIGACAO')
         T[m][k] = 'ESGOTO' in str(g('TIPO_FATURAMENTO') or '').upper()
-        Q[m][k] = int(g('Qtd_eco_fat_esgoto') or 0)
+        if cont == 'esgoto': Q[m][k] = int(g('Qtd_eco_fat_esgoto') or 0)
+        else: Q[m][k] = int(g('Eco_total') or 0) if T[m][k] else 0
         F[m][k] = float(g('Faturamento_bruto_direta_esgoto') or 0)
 refs = sorted(refs); n = len(refs)
 z = lambda: [0.0] * n
@@ -53,6 +57,7 @@ for m in T:
             if d > 0: aum[r] += d; e_orig[r] += d
             elif d < 0: red[r] -= d
 rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][mm-1]}/{str(a)[2:]}' for a, mm in refs]
+print(f'Contagem: {cont}')
 print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
 for r in range(n):
     print(f'{rot[r]:7} {e_base[r]:8.0f} {e_nova[r]:10.0f} {nov[r]+aum[r]:6.0f} {lig[r]:9.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')

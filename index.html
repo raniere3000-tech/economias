@@ -91,6 +91,30 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 @media (max-width:1100px){.kpis-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:560px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+.toolbar .direita{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap}
+.contagem{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--azul-claro)}
+.contagem .toggle button{padding:4px 12px}
+
+/* ===== Linha do tempo ===== */
+.lt{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));min-width:1000px;margin-top:6px}
+.lt-col{display:flex;flex-direction:column;padding-right:12px;min-width:0}
+.lt-marco{position:relative;height:14px;margin:0 -12px 8px 0}
+.lt-marco::before{content:'';position:absolute;left:0;right:0;top:6px;border-top:2px solid var(--linha)}
+.lt-marco i{position:absolute;left:0;top:2px;width:10px;height:10px;border-radius:50%;background:var(--azul)}
+.lt-col:first-child .lt-marco i{background:var(--azul-claro)}
+.lt-col:last-child .lt-marco::before{right:12px}
+.lt p{margin:0}
+.lt-mes{font-family:var(--fonte-cond);font-size:12.5px;font-weight:600;color:var(--azul-claro)}
+.lt-topo{min-height:104px}
+.lt-val{font-family:var(--fonte-cond);font-size:24px;font-weight:700;color:var(--marinho);line-height:1.15;font-variant-numeric:tabular-nums}
+.lt-rot{font-size:11.5px;color:var(--azul-claro);line-height:1.3}
+.lt-det{font-size:11.5px;color:#334155;line-height:1.35;margin-top:6px;font-variant-numeric:tabular-nums}
+.lt-sep{border-top:1px solid var(--linha);margin:8px 0}
+.lt-k{font-size:11px;color:var(--azul-claro);line-height:1.25}
+.lt p.lt-v{font-family:var(--fonte-cond);font-size:14px;font-weight:600;color:var(--preto);margin:0 0 6px;font-variant-numeric:tabular-nums}
+.lt p.lt-v.pos{color:var(--azul)}
+.lt p.lt-v.neg{color:var(--laranja-texto)}
+
 .avisos-card{border-color:var(--laranja);display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;font-size:13px;color:var(--laranja-texto)}
 .btn-just{padding:5px 12px;border:1px solid var(--linha);border-radius:6px;background:#fff;color:var(--marinho);font-size:12.5px;cursor:pointer;font-weight:600}
 .btn-just:hover{border-color:var(--azul-claro)}
@@ -186,7 +210,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.1</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.2</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -210,9 +234,18 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <button type="button" class="active" data-tab="resumo" aria-pressed="true">Resumo</button>
     <button type="button" data-tab="cons" aria-pressed="false">Consolidado</button>
   </div>
-  <div class="filtros">
-    <div class="filtro-wrap" id="fCid"></div>
-    <div class="filtro-wrap" id="fSub"></div>
+  <div class="direita">
+    <div class="contagem" title="Teste de regra: em ligações com AGUA E ESGOTO, contar o total de economias (Eco_total) ou as economias de esgoto faturadas (Qtd_eco_fat_esgoto)">
+      Contar economias por
+      <div class="toggle" role="group" aria-label="Contagem de economias">
+        <button type="button" class="active" data-cont="total" aria-pressed="true">Total de economias</button>
+        <button type="button" data-cont="esgoto" aria-pressed="false">Economias de esgoto faturadas</button>
+      </div>
+    </div>
+    <div class="filtros">
+      <div class="filtro-wrap" id="fCid"></div>
+      <div class="filtro-wrap" id="fSub"></div>
+    </div>
   </div>
 </div>
 
@@ -232,6 +265,12 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="kpis-grid" id="kpis"></div>
 
     <div class="card avisos-card" id="divNote" hidden><span id="divTxt"></span><button class="btn-just" id="btnDiv" type="button">Ver no consolidado</button></div>
+
+    <div class="card">
+      <h2>Linha do tempo de 2026</h2>
+      <p class="nota-secao">Economias que passaram a faturar esgoto em cada mês, separadas entre ligações que já estavam na base e matrículas novas, o faturamento de esgoto dessas economias e o faturamento de esgoto total do mês.</p>
+      <div class="bloco-rolagem"><div class="lt" id="linhaTempo"></div></div>
+    </div>
 
     <div class="card">
       <div class="card-topo">
@@ -606,7 +645,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.1';
+const VERSAO_SITE = '1.2';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -621,7 +660,7 @@ const signed = (v, f) => Math.abs(v) < 0.005 ? f(0) : (v > 0 ? '+' : '−') + f(
 const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 
 let D = null;
-const st = { cidSel: null, subSel: null, metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
+const st = { cidSel: null, subSel: null, metric: 'eco', cont: 'total', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
   { k: 'grp', h: 'COD_GRUPO', l: 'Grupo' },
@@ -786,11 +825,21 @@ function derive(){
     D.yStat[m] = D.entra[m] > 0 ? 2 : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
   }
 }
+// Economias usadas na contagem. 'total': em ligações com AGUA E ESGOTO vale o Eco_total, mesmo quando a
+// Qtd_eco_fat_esgoto vem 0 por exceção de faturamento; sem esgoto, 0. 'esgoto': a Qtd_eco_fat_esgoto como veio.
+function econs(){
+  if (st.cont === 'esgoto') return D.qe;
+  if (!D.qTot){
+    const N = D.et.length; D.qTot = new Int32Array(N);
+    for (let j = 0; j < N; j++) if (D.hasE[j]) D.qTot[j] = D.et[j];
+  }
+  return D.qTot;
+}
 // Entradas de economias (primeira troca para AGUA E ESGOTO + aumento em quem já pagava), separadas pela origem
 // da ligação (já estava na base ou matrícula nova), ligações que passaram a faturar esgoto, faturamento de esgoto
 // separado entre economias que já existiam e economias novas de 2026 e, só para conhecimento, saídas e reentradas
 function fluxos(k){
-  const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.qe, F = D.fe;
+  const nR = D.refs.length, P = D.present, H = D.hasE, Q = econs(), F = D.fe;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
   const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
@@ -919,6 +968,20 @@ function renderResumo(){
     { nome: 'Reentradas (não somadas)', cls: 'mudo', vals: sl(o.ree), fmt: v => nf0.format(v) }
   ]);
 
+  // linha do tempo: dez/25 como base e um bloco por mês
+  const ltK = (k, v, c) => `<p class="lt-k">${k}</p><p class="lt-v ${c || ''}">${v}</p>`;
+  const lt = $('#linhaTempo'); lt.style.setProperty('--n', nR);
+  lt.innerHTML = labels.map((l, r) => {
+    if (!r) return `<div class="lt-col"><div class="lt-marco"><i></i></div><div class="lt-topo"><p class="lt-mes">${l}</p>` +
+      `<p class="lt-val">${nf0.format(o.ecoTot[0])}</p><p class="lt-rot">economias com esgoto na base</p></div>` +
+      `<div class="lt-sep"></div>${ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[0]))}</div>`;
+    return `<div class="lt-col"><div class="lt-marco"><i></i></div><div class="lt-topo"><p class="lt-mes">${l}</p>` +
+      `<p class="lt-val">${mais(ent(r))}</p><p class="lt-rot">novas economias com esgoto</p>` +
+      `<p class="lt-det">${nf0.format(o.eBase[r])} já estavam na base<br>${nf0.format(o.eNova[r])} de matrículas novas</p></div>` +
+      `<div class="lt-sep"></div>${ltK('Faturamento das novas', brl0.format(o.fatNovas[r]), 'pos')}` +
+      ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[r])) + ltK('Deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg') + '</div>';
+  }).join('');
+
   // faturamento de esgoto por mês: existente + novas
   const exist = labels.map((_, r) => Math.max(0, o.fatTot[r] - o.fatNovas[r])), novas = [...o.fatNovas];
   $('#blocoFat').innerHTML = graficoAlinhado(labels, [
@@ -930,7 +993,7 @@ function renderResumo(){
     { nome: 'Economias novas de 2026', cor: 'var(--marinho)', vals: novas, fmt: v => brl0.format(v) },
     { nome: 'Faturamento de esgoto total', cls: 'forte', vals: [...o.fatTot], fmt: v => brl0.format(v) },
     { nome: 'Participação das novas', vals: labels.map((_, r) => o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0), fmt: v => nf1.format(v) + '%' },
-    { nome: 'Economias com esgoto faturadas', cls: 'mudo', vals: [...o.ecoTot], fmt: v => nf0.format(v) }
+    { nome: st.cont === 'esgoto' ? 'Economias com esgoto faturadas' : 'Economias com esgoto (total de economias)', cls: 'mudo', vals: [...o.ecoTot], fmt: v => nf0.format(v) }
   ]);
 
   const money = st.metric === 'fat';
@@ -1164,6 +1227,11 @@ $('#btnClear').onclick = async () => {
   location.reload();
 };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+document.querySelectorAll('[data-cont]').forEach(b => b.onclick = () => {
+  st.cont = b.dataset.cont;
+  document.querySelectorAll('[data-cont]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+  refresh();
+});
 document.querySelectorAll('[data-metric]').forEach(b => b.onclick = () => {
   st.metric = b.dataset.metric;
   document.querySelectorAll('[data-metric]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
