@@ -88,7 +88,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Contagem de economias (decidido na v1.3):** vale a `Qtd_eco_fat_esgoto`, a quantidade de economias que fatura esgoto de fato. Na v1.2 foi testado contar o `Eco_total` em toda ligação com AGUA E ESGOTO; o usuário achou o número muito abaixo e descartou.
 - **Economias novas no mês:** troca + aumento. O total do ano é a soma dos meses, sem desconto de saídas.
 - **Origem (como o Resumo mostra as economias novas):** o usuário não quer ver a separação "X por troca e Y por aumento". As economias novas aparecem divididas pela origem da ligação: **ligações que já estavam na base** (passaram de AGUA para AGUA E ESGOTO) e **matrículas novas já com AGUA E ESGOTO** (`nova[m]`). O aumento continua somando, no grupo da ligação. Matrícula que não aparece em dez/25 e surge em 2026 já com esgoto conta como nova.
-- **Ligações novas:** quantidade de matrículas que passaram a faturar esgoto, contada no mês de `entra[m]`, uma vez só. Aumento de economias não conta ligação.
+- **Ligações que passaram a faturar esgoto:** quantidade de matrículas que passaram a faturar esgoto, somando as que já estavam na base e as matrículas novas, contada no mês de `entra[m]`, uma vez só. Ligação que já tinha esgoto em dez/25 e aumentou economias não conta aqui (aparece na dica do gráfico como "Ligações que já tinham esgoto e aumentaram"). Antes da v1.5 o rótulo era "Ligações novas", que confundia.
 - **Saídas (só para conhecimento):** a troca de AGUA E ESGOTO para AGUA conta as economias do mês anterior. A redução de economias em quem continua com esgoto também entra como saída informativa.
 - **Reentrada (só para conhecimento, não soma):** a ligação voltou a ter esgoto depois de sair. Isso vale para quem já tinha entrado em 2026 e também para quem já pagava em dez/25.
 - **Faturamento de esgoto das economias novas:** é calculado por coorte, em cada mês em que a ligação continua faturando esgoto.
@@ -117,7 +117,7 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
 
 1. **Faixa de 8 indicadores:**
    - economias novas em 2026, em destaque;
-   - ligações novas em 2026, em destaque;
+   - ligações que passaram a faturar esgoto em 2026, em destaque (títulos dos indicadores quebram em até 2 linhas);
    - média por mês;
    - melhor mês;
    - faturamento de esgoto das novas no último mês, com a participação no total;
@@ -126,14 +126,16 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - saídas, com borda laranja.
 2. **Aviso de divergências**, quando houver.
 3. **Cartão "Linha do tempo de 2026"**, recriado a partir do print do painel antigo, na paleta clara:
-   - dez/25: economias com esgoto na base e faturamento de esgoto do mês;
-   - cada mês: economias novas, quantas vieram de ligações que já estavam na base e quantas de matrículas novas, faturamento das novas (azul), faturamento de esgoto do mês e as que deixaram de faturar (laranja);
+   - dez/25: economias e ligações com esgoto na base e faturamento de esgoto do mês;
+   - cada mês: economias novas e ligações que passaram a faturar esgoto, as duas separadas entre já na base e matrículas novas, faturamento das novas (azul), faturamento de esgoto do mês e as que deixaram de faturar (laranja);
+   - última coluna "Total 2026", com fundo tint: os mesmos itens somados no ano;
+   - os blocos ficam alinhados entre as colunas com `grid-template-rows: subgrid` (6 linhas por coluna);
    - não mostra troca e aumento.
 4. **Cartão "Economias que passaram a faturar esgoto, por mês":**
    - colunas empilhadas pela origem: ligações que já estavam na base em marinho e matrículas novas já com AGUA E ESGOTO em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
-   - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações novas no mês, ligações acumuladas, saídas e reentradas.
-   - **Interativo:** ao passar o mouse (ou tocar) numa coluna, ela fica destacada e uma dica mostra os dados do mês: as duas origens, economias novas, acumulado, ligações novas e acumuladas, saídas e reentradas. O mesmo vale para o gráfico de faturamento (existente, novas, total, participação e economias com esgoto). A dica é montada por `ligaDica(el)` a partir de `el.dica = { n, titulo, linhas }`, definido em `renderResumo()`.
+   - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações que passaram a faturar esgoto, ligações acumuladas, saídas e reentradas.
+   - **Interativo:** ao passar o mouse (ou tocar) numa coluna, ela fica destacada e uma dica mostra os dados do mês: as duas origens, economias novas, acumulado, ligações que passaram a faturar esgoto (já na base, matrículas novas, acumuladas), economias acrescentadas em ligações que já tinham esgoto e quantas ligações foram, saídas e reentradas. O mesmo vale para o gráfico de faturamento (existente, novas, total, participação e economias com esgoto). A dica é montada por `ligaDica(el)` a partir de `el.dica = { n, titulo, linhas }`, definido em `renderResumo()`.
    - O alinhamento funciona porque o SVG tem `viewBox` de 1000 de largura e área de rótulos de 180, enquanto a tabela usa `table-layout: fixed` com a primeira coluna em 18%. As demais colunas têm larguras iguais nos dois.
 5. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
 6. **Tabelas Por cidade e Por sub-categoria:**
@@ -180,6 +182,6 @@ python tests/conferir_totais.py base_teste.xlsx           # números de referên
 
 Valores de referência com a base sintética padrão (3000 matrículas, semente 7). Desde a v1.2 o gerador inclui ligações com AGUA E ESGOTO e economias de esgoto zeradas em mar/26 e abr/26 (1 a cada 37 matrículas):
 
-**2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.456** ligações novas (142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
+**2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.456** ligações que passaram a faturar esgoto (1.314 já na base + 142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
 
 Nunca suba arquivos `.xlsx` ou `.csv` para o repositório: o `.gitignore` já bloqueia, e os dados reais têm nomes de clientes.

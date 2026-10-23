@@ -83,7 +83,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .kpi-card{background:#fff;padding:8px 12px;border-top:3px solid var(--marinho);min-width:0}
 .kpi-card.negativo{border-top-color:var(--laranja)}
 .kpi-card.destaque{background:var(--tint)}
-.kpi-card h3{font-size:11px;font-weight:500;color:var(--azul-claro);margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi-card h3{font-size:11px;font-weight:500;color:var(--azul-claro);margin:0 0 2px;line-height:1.3;min-height:2.6em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .kpi-valor{font-family:var(--fonte-cond);font-size:20px;font-weight:600;margin:0;color:var(--preto);letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi-card.destaque .kpi-valor{font-size:24px;color:var(--marinho)}
 .kpi-card.negativo .kpi-valor{color:var(--laranja-texto)}
@@ -93,16 +93,16 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 
 
 /* ===== Linha do tempo ===== */
-.lt{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));min-width:1000px;margin-top:6px}
-.lt-col{display:flex;flex-direction:column;padding-right:12px;min-width:0}
-.lt-marco{position:relative;height:14px;margin:0 -12px 8px 0}
+/* subgrid: cada bloco (mês, economias, ligações, faturamento) fica na mesma linha em todas as colunas */
+.lt{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));grid-template-rows:repeat(6,auto);min-width:1100px;margin-top:6px}
+.lt-col{display:grid;grid-row:1 / span 6;grid-template-rows:subgrid;padding-right:10px;min-width:0}
+.lt-marco{position:relative;height:14px;margin:0 -10px 8px 0}
 .lt-marco::before{content:'';position:absolute;left:0;right:0;top:6px;border-top:2px solid var(--linha)}
 .lt-marco i{position:absolute;left:0;top:2px;width:10px;height:10px;border-radius:50%;background:var(--azul)}
 .lt-col:first-child .lt-marco i{background:var(--azul-claro)}
-.lt-col:last-child .lt-marco::before{right:12px}
+.lt-col:nth-last-child(2) .lt-marco::before{right:10px}
 .lt p{margin:0}
 .lt-mes{font-family:var(--fonte-cond);font-size:12.5px;font-weight:600;color:var(--azul-claro)}
-.lt-topo{min-height:104px}
 .lt-val{font-family:var(--fonte-cond);font-size:24px;font-weight:700;color:var(--marinho);line-height:1.15;font-variant-numeric:tabular-nums}
 .lt-rot{font-size:11.5px;color:var(--azul-claro);line-height:1.3}
 .lt-det{font-size:11.5px;color:#334155;line-height:1.35;margin-top:6px;font-variant-numeric:tabular-nums}
@@ -110,6 +110,12 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .lt-k{font-size:11px;color:var(--azul-claro);line-height:1.25}
 .lt p.lt-v{font-family:var(--fonte-cond);font-size:14px;font-weight:600;color:var(--preto);margin:0 0 6px;font-variant-numeric:tabular-nums}
 .lt p.lt-v.pos{color:var(--azul)}
+.lt-col.total{background:var(--tint);border-radius:8px;padding:0 10px 8px;margin-left:4px}
+.lt-col.total .lt-marco{margin:0 0 8px}
+.lt-col.total .lt-marco::before{display:none}
+.lt-col.total .lt-marco i{background:var(--marinho)}
+.lt-col.total .lt-mes{color:var(--marinho)}
+
 .lt p.lt-v.neg{color:var(--laranja-texto)}
 
 .avisos-card{border-color:var(--laranja);display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;font-size:13px;color:var(--laranja-texto)}
@@ -217,7 +223,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.4</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.5</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -266,7 +272,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 
     <div class="card">
       <h2>Linha do tempo de 2026</h2>
-      <p class="nota-secao">Economias que passaram a faturar esgoto em cada mês, separadas entre ligações que já estavam na base e matrículas novas, o faturamento de esgoto dessas economias e o faturamento de esgoto total do mês.</p>
+      <p class="nota-secao">Economias e ligações que passaram a faturar esgoto em cada mês, separadas entre as que já estavam na base e as matrículas novas, o faturamento de esgoto dessas economias e o faturamento de esgoto total do mês. No fim, o total do ano.</p>
       <div class="bloco-rolagem"><div class="lt" id="linhaTempo"></div></div>
     </div>
 
@@ -643,7 +649,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.4';
+const VERSAO_SITE = '1.5';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -829,7 +835,7 @@ function derive(){
 function fluxos(k){
   const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.qe, F = D.fe;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
-  const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
+  const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), ligAum: z(nR), ligTot: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
     cidUsed: new Uint8Array(nC), subUsed: new Uint8Array(nS) };
   for (let m = 0, n = D.mats.length; m < n; m++){
@@ -838,7 +844,7 @@ function fluxos(k){
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
-      if (P[j]){ o.fatTot[r] += F[j]; o.ecoTot[r] += Q[j]; }
+      if (P[j]){ o.fatTot[r] += F[j]; o.ecoTot[r] += Q[j]; if (H[j]) o.ligTot[r]++; }
       if (D.div[j]) o.divMat[r]++;
       if (!r) continue;
       if (H[j]){
@@ -851,7 +857,7 @@ function fluxos(k){
       let e = 0, out = 0;
       if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } else o.ree[r] += Q[j]; }
       else if (!h && p){ out = Q[j - 1]; o.sai[r] += out; }
-      else if (h && p){ const d = Q[j] - Q[j - 1]; if (d > 0){ e = d; o.aum[r] += d; } else if (d < 0){ out = -d; o.red[r] += out; } }
+      else if (h && p){ const d = Q[j] - Q[j - 1]; if (d > 0){ e = d; o.aum[r] += d; o.ligAum[r]++; } else if (d < 0){ out = -d; o.red[r] += out; } }
       if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; }
       if (out){ o.cidS[c] += out; o.subS[s] += out; }
     }
@@ -952,7 +958,7 @@ function renderResumo(){
 
   $('#kpis').innerHTML = [
     { t: 'Economias novas em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
-    { t: 'Ligações novas em 2026', v: mais(ligAno), d: 'passaram a faturar esgoto', c: 'destaque' },
+    { t: 'Ligações que passaram a faturar esgoto em 2026', v: mais(ligAno), d: 'novas ou já na base', c: 'destaque' },
     { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `economias, em ${L} meses` },
     { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'mais economias novas' },
     { t: `Fat. esgoto das novas em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do faturamento de esgoto` },
@@ -978,25 +984,30 @@ function renderResumo(){
     { nome: 'Matrículas novas já com AGUA E ESGOTO', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
     { nome: 'Economias novas no mês', cls: 'forte', vals: entA, fmt: mais },
     { nome: 'Acumulado em 2026', vals: accA, fmt: v => nf0.format(v) },
-    { nome: 'Ligações novas no mês', cls: 'forte', vals: sl(o.lig), fmt: mais },
-    { nome: 'Ligações acumuladas', vals: L1.map((_, i) => (accL += o.lig[i + 1])), fmt: v => nf0.format(v) },
+    { nome: 'Ligações que passaram a faturar esgoto', cls: 'forte', vals: sl(o.lig), fmt: mais },
+    { nome: 'Ligações acumuladas em 2026', vals: L1.map((_, i) => (accL += o.lig[i + 1])), fmt: v => nf0.format(v) },
     { nome: 'Saídas (só para conhecimento)', cls: 'info', vals: L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]), fmt: v => nf0.format(v) },
     { nome: 'Reentradas (não somadas)', cls: 'mudo', vals: sl(o.ree), fmt: v => nf0.format(v) }
   ]);
 
-  // linha do tempo: dez/25 como base e um bloco por mês
+  // linha do tempo: dez/25 como base, um bloco por mês e o total de 2026 no fim
   const ltK = (k, v, c) => `<p class="lt-k">${k}</p><p class="lt-v ${c || ''}">${v}</p>`;
-  const lt = $('#linhaTempo'); lt.style.setProperty('--n', nR);
+  const ltCol = (cls, mes, topo, lig, base) => `<div class="lt-col ${cls}"><div class="lt-marco"><i></i></div><div class="lt-topo"><p class="lt-mes">${mes}</p>${topo}</div>` +
+    `<div class="lt-sep"></div><div class="lt-lig">${lig}</div><div class="lt-sep"></div><div>${base}</div></div>`;
+  const ltEco = (v, eb, en) => `<p class="lt-val">${mais(v)}</p><p class="lt-rot">novas economias com esgoto</p>` +
+    `<p class="lt-det">${nf0.format(eb)} já na base<br>${nf0.format(en)} de matrículas novas</p>`;
+  const ltLig = (v, vn) => `<p class="lt-v pos" style="margin:0">${mais(v)}</p><p class="lt-rot">ligações que passaram a faturar esgoto</p>` +
+    `<p class="lt-det" style="margin-top:2px">${nf0.format(v - vn)} já na base<br>${nf0.format(vn)} matrículas novas</p>`;
+  const lt = $('#linhaTempo'); lt.style.setProperty('--n', nR + 1);
   lt.innerHTML = labels.map((l, r) => {
-    if (!r) return `<div class="lt-col"><div class="lt-marco"><i></i></div><div class="lt-topo"><p class="lt-mes">${l}</p>` +
-      `<p class="lt-val">${nf0.format(o.ecoTot[0])}</p><p class="lt-rot">economias com esgoto na base</p></div>` +
-      `<div class="lt-sep"></div>${ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[0]))}</div>`;
-    return `<div class="lt-col"><div class="lt-marco"><i></i></div><div class="lt-topo"><p class="lt-mes">${l}</p>` +
-      `<p class="lt-val">${mais(ent(r))}</p><p class="lt-rot">novas economias com esgoto</p>` +
-      `<p class="lt-det">${nf0.format(o.eBase[r])} já estavam na base<br>${nf0.format(o.eNova[r])} de matrículas novas</p></div>` +
-      `<div class="lt-sep"></div>${ltK('Faturamento das novas', brl0.format(o.fatNovas[r]), 'pos')}` +
-      ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[r])) + ltK('Deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg') + '</div>';
-  }).join('');
+    if (!r) return ltCol('', l, `<p class="lt-val">${nf0.format(o.ecoTot[0])}</p><p class="lt-rot">economias com esgoto na base</p>`,
+      `<p class="lt-v" style="margin:0">${nf0.format(o.ligTot[0])}</p><p class="lt-rot">ligações com esgoto na base</p>`, ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[0])));
+    return ltCol('', l, ltEco(ent(r), o.eBase[r], o.eNova[r]), ltLig(o.lig[r], o.ligNova[r]),
+      ltK('Faturamento das novas', brl0.format(o.fatNovas[r]), 'pos') + ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[r])) +
+      ltK('Deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'));
+  }).join('') + ltCol('total', 'Total 2026', ltEco(total, sumFrom1(o.eBase), sumFrom1(o.eNova)), ltLig(ligAno, sumFrom1(o.ligNova)),
+    ltK('Faturamento das novas no ano', brl0.format(fatAno), 'pos') + ltK('Faturamento de esgoto no ano', brl0.format(sumFrom1(o.fatTot))) +
+    ltK('Deixaram de faturar', nf0.format(sai), 'neg'));
 
   const saiA = L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]);
   let accL2 = 0; const ligAcc = L1.map((_, i) => (accL2 += o.lig[i + 1]));
@@ -1005,8 +1016,12 @@ function renderResumo(){
     { nome: 'Matrículas novas', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
     { nome: 'Economias novas no mês', valor: mais(entA[i]), cls: 'forte' },
     { nome: 'Acumulado em 2026', valor: nf0.format(accA[i]) }, 'sep',
-    { nome: 'Ligações novas no mês', valor: mais(o.lig[i + 1]), cls: 'forte' },
-    { nome: 'Ligações acumuladas', valor: nf0.format(ligAcc[i]) }, 'sep',
+    { nome: 'Ligações que passaram a faturar esgoto', valor: mais(o.lig[i + 1]), cls: 'forte' },
+    { nome: 'Já estavam na base', valor: nf0.format(o.lig[i + 1] - o.ligNova[i + 1]) },
+    { nome: 'Matrículas novas', valor: nf0.format(o.ligNova[i + 1]) },
+    { nome: 'Acumuladas em 2026', valor: nf0.format(ligAcc[i]) }, 'sep',
+    { nome: 'Economias acrescentadas em ligações que já tinham esgoto', valor: nf0.format(o.aum[i + 1]) },
+    { nome: 'Ligações que já tinham esgoto e aumentaram', valor: nf0.format(o.ligAum[i + 1]) }, 'sep',
     { nome: 'Saídas (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
     { nome: 'Reentradas (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
   ] };

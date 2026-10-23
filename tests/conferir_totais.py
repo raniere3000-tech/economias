@@ -25,7 +25,7 @@ for ws in wb.worksheets:
 refs = sorted(refs); n = len(refs)
 z = lambda: [0.0] * n
 nov, aum, sai, red, ree, fat_tot, fat_novas = z(), z(), z(), z(), z(), z(), z()
-e_base, e_nova, lig, lig_nova = z(), z(), z(), z()
+e_base, e_nova, lig, lig_nova, lig_aum = z(), z(), z(), z(), z()
 for m in T:
     h = [T[m].get(k, False) for k in refs]; q = [Q[m].get(k, 0) for k in refs]; f = [F[m].get(k, 0) for k in refs]
     entra = -1
@@ -50,12 +50,14 @@ for m in T:
         elif h[r - 1] and not h[r]: sai[r] += q[r - 1]
         elif h[r] and h[r - 1]:
             d = q[r] - q[r - 1]
-            if d > 0: aum[r] += d; e_orig[r] += d
+            if d > 0: aum[r] += d; e_orig[r] += d; lig_aum[r] += 1
             elif d < 0: red[r] -= d
 rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][mm-1]}/{str(a)[2:]}' for a, mm in refs]
 print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
 for r in range(n):
     print(f'{rot[r]:7} {e_base[r]:8.0f} {e_nova[r]:10.0f} {nov[r]+aum[r]:6.0f} {lig[r]:9.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')
 print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_base):,.0f} + matrículas novas {sum(e_nova):,.0f})')
-print(f'Ligações novas em 2026: {sum(lig):,.0f}  (matrículas novas {sum(lig_nova):,.0f})')
+print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já na base {sum(lig)-sum(lig_nova):,.0f} + matrículas novas {sum(lig_nova):,.0f})')
+print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{rot[r]} {lig_aum[r]:.0f}' for r in range(1, n)))
+print('Por mês, economias acrescentadas nelas:', ' '.join(f'{rot[r]} {aum[r]:.0f}' for r in range(1, n)))
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
