@@ -166,7 +166,7 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
 
 ### Consolidado
 
-Uma linha por matrícula. As colunas cadastrais e "Esgoto em 2026" ficam fixas, seguidas das 8 colunas por referência: `ULTIMO_CONTRATO, COD_GRUPO, TIPO_FATURAMENTO, Fat. água, Fat. esgoto, Eco. água, Eco. esgoto, Eco. total`.
+Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês faturando esgoto" (`pri[m]`, v1.19, pedido do usuário; "–" se nunca faturou) ficam fixas, seguidas das 8 colunas por referência: `ULTIMO_CONTRATO, COD_GRUPO, TIPO_FATURAMENTO, Fat. água, Fat. esgoto, Eco. água, Eco. esgoto, Eco. total`.
 
 - **Busca:** por matrícula ou nome.
 - **Filtro de movimento:**

@@ -235,7 +235,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.18</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.19</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -749,7 +749,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.18';
+const VERSAO_SITE = '1.19';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1274,7 +1274,7 @@ function cellVal(f, j, forCsv){
 }
 const DIVMSG = ['', 'Economias de esgoto diferentes do total de economias', 'Economias de esgoto sem valor de esgoto faturado'];
 const PAGE = 100;
-const FIXED = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'Esgoto em 2026'];
+const FIXED = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'Esgoto em 2026', '1º mês faturando esgoto'];
 function renderCons(recalc){
   if (recalc || !st.list) { st.list = consList(); st.page = 0; }
   const list = st.list, nR = D.refs.length, labels = D.refs.map(refLabel);
@@ -1297,7 +1297,7 @@ function renderCons(recalc){
   const start = st.page * PAGE, end = Math.min(list.length, start + PAGE);
   for (let i = start; i < end; i++){
     const m = list[i];
-    h += `<tr><td class="txt">${esc(D.mats[m])}</td><td class="txt c2">${esc(D.nomes[m])}</td><td class="txt">${esc(D.dict.cid[D.cid[m]])}</td><td class="txt">${esc(D.dict.sub[D.sub[m]])}</td><td class="txt">${esc(D.dict.sl[D.sl[m]])}</td><td class="txt">${esc(D.dict.sc[D.sc[m]])}</td><td class="txt ${YCLS[D.yStat[m]]}">${YSTAT[D.yStat[m]]}</td>`;
+    h += `<tr><td class="txt">${esc(D.mats[m])}</td><td class="txt c2">${esc(D.nomes[m])}</td><td class="txt">${esc(D.dict.cid[D.cid[m]])}</td><td class="txt">${esc(D.dict.sub[D.sub[m]])}</td><td class="txt">${esc(D.dict.sl[D.sl[m]])}</td><td class="txt">${esc(D.dict.sc[D.sc[m]])}</td><td class="txt ${YCLS[D.yStat[m]]}">${YSTAT[D.yStat[m]]}</td><td class="txt">${D.pri[m] >= 0 ? labels[D.pri[m]] : '–'}</td>`;
     for (let r = 0; r < nR; r++){
       const j = m * nR + r;
       fl.forEach((f, fi) => {
