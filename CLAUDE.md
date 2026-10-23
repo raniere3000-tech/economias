@@ -102,7 +102,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 ## Vocabulário da interface (definido na v1.8)
 
 - **"Novas" é sempre "novas faturando":** as economias e matrículas não são necessariamente novas na base, e sim novas faturando esgoto. Use "economias novas faturando esgoto" e "matrículas novas faturando esgoto", em indicadores, gráficos, linha do tempo e tabelas.
-- **Não misture economias com matrículas no mesmo texto.** A divisão de origem é dita na própria unidade. Na linha do tempo (v1.9, pedido do usuário): "X já existiam na base" e "Y economias novas faturando" (ou "Y matrículas novas faturando"). Nos gráficos, tabelas e legendas continua "Já existiam na base" e "Novas na base".
+- **Não misture economias com matrículas no mesmo texto.** A divisão de origem segue o padrão do gráfico de faturamento ("Economias que já faturavam" / "Economias novas faturando em 2026"), desde a v1.10: **"Economias que já existiam na base"** e **"Economias novas faturando em 2026"** (o mesmo com matrículas) em legendas, gráficos, tabelas e dicas; na linha do tempo, "X já existiam na base" e "Y economias novas faturando". As linhas de soma se chamam "Total de economias no mês" e "Total de matrículas no mês", para não repetir o nome da parte.
 - **Faturamento:** "economias que já faturavam" e "economias novas faturando em 2026".
 - **Saídas:** "economias que deixaram de faturar" (só para conhecimento) e "economias que voltaram a faturar" (não somadas).
 - **"Ligação" não aparece no Resumo;** a unidade de contagem é a matrícula.
@@ -135,14 +135,14 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - faturamento de esgoto total no último mês, com a variação sobre dez/25;
    - economias que deixaram de faturar, com borda laranja.
 2. **Cartão "Linha do tempo de 2026"**, recriado a partir do print do painel antigo, na paleta clara, com um seletor **Economias / Matrículas / Faturamento** (`st.lt`) que mostra uma informação por vez:
-   - Economias: dez/25 com as economias faturando esgoto na base; cada mês com as economias novas faturando, quantas já existiam na base e quantas são novas na base, e as que deixaram de faturar (laranja);
+   - Economias: dez/25 com as economias faturando esgoto na base; cada mês com as economias novas faturando, quantas já existiam na base e quantas são economias novas faturando, e as que deixaram de faturar (laranja);
    - Matrículas: o mesmo com matrículas, sem as que deixaram de faturar;
    - Faturamento: dez/25 com o faturamento de esgoto do mês; cada mês com o faturamento das economias novas faturando (com a participação no total) e o faturamento de esgoto do mês;
    - última coluna "Total 2026", mais larga e com fundo tint: os mesmos itens somados no ano;
    - os blocos ficam alinhados entre as colunas com `grid-template-rows: subgrid` (3 linhas por coluna);
    - não mostra troca e aumento.
 3. **Cartão "Economias novas faturando esgoto, por mês":**
-   - colunas empilhadas pela origem: já existiam na base em marinho e novas na base em azul;
+   - colunas empilhadas pela origem: economias que já existiam na base em marinho e economias novas faturando em 2026 em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
    - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações que passaram a faturar esgoto, ligações acumuladas, saídas e reentradas.
    - **Interativo:** ao passar o mouse (ou tocar) numa coluna, ela fica destacada e uma dica mostra os dados do mês: as duas origens, economias novas, acumulado, ligações que passaram a faturar esgoto (já na base, matrículas novas, acumuladas), economias acrescentadas em ligações que já tinham esgoto e quantas ligações foram, saídas e reentradas. O mesmo vale para o gráfico de faturamento (existente, novas, total, participação e economias com esgoto). A dica é montada por `ligaDica(el)` a partir de `el.dica = { n, titulo, linhas }`, definido em `renderResumo()`.

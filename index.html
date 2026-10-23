@@ -227,7 +227,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.9</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.10</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -291,9 +291,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="card-topo">
         <div>
           <h2>Economias novas faturando esgoto, por mês</h2>
-          <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram de AGUA para AGUA E ESGOTO ou tiveram mais economias de esgoto faturadas) e as novas na base, que já entraram como AGUA E ESGOTO. As que deixaram de faturar não são descontadas.</p>
+          <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram de AGUA para AGUA E ESGOTO ou tiveram mais economias de esgoto faturadas) e as novas faturando de matrículas que entraram na base em 2026 já como AGUA E ESGOTO. As que deixaram de faturar não são descontadas.</p>
         </div>
-        <div class="legenda"><span><i style="background:var(--marinho)"></i>Já existiam na base</span><span><i style="background:var(--azul)"></i>Novas na base</span></div>
+        <div class="legenda"><span><i style="background:var(--marinho)"></i>Economias que já existiam na base</span><span><i style="background:var(--azul)"></i>Economias novas faturando em 2026</span></div>
       </div>
       <div class="bloco-rolagem"><div class="bloco" id="blocoEco"></div></div>
     </div>
@@ -664,7 +664,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.9';
+const VERSAO_SITE = '1.10';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -984,7 +984,7 @@ function renderResumo(){
 
   $('#kpis').innerHTML = [
     { t: 'Economias novas faturando esgoto em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
-    { t: 'Matrículas novas faturando esgoto em 2026', v: mais(ligAno), d: 'já existiam ou novas na base', c: 'destaque' },
+    { t: 'Matrículas novas faturando esgoto em 2026', v: mais(ligAno), d: 'já existiam na base ou novas', c: 'destaque' },
     { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `economias, em ${L} meses` },
     { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'maior entrada de economias' },
     { t: `Fat. esgoto das economias novas faturando em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do total de esgoto` },
@@ -999,15 +999,15 @@ function renderResumo(){
   const entA = L1.map((_, i) => ent(i + 1));
   let acc = 0, accL = 0; const accA = entA.map(v => (acc += v));
   $('#blocoEco').innerHTML = graficoAlinhado(L1, [
-    { nome: 'Já existiam na base', values: sl(o.eBase), cor: '#102840', corTexto: '#fff' },
-    { nome: 'Novas na base', values: sl(o.eNova), cor: '#176b9c', corTexto: '#fff' }
+    { nome: 'Economias que já existiam na base', values: sl(o.eBase), cor: '#102840', corTexto: '#fff' },
+    { nome: 'Economias novas faturando em 2026', values: sl(o.eNova), cor: '#176b9c', corTexto: '#fff' }
   ], { fmt: mais, fmtIn: v => nf0.format(v), aria: 'Economias novas faturando esgoto por mês' }) +
   tabelaAlinhada(L1, [
     { nome: 'Economias que já existiam na base', cor: 'var(--marinho)', vals: sl(o.eBase), fmt: v => nf0.format(v) },
-    { nome: 'Economias novas na base', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
-    { nome: 'Economias novas faturando no mês', cls: 'forte', vals: entA, fmt: mais },
+    { nome: 'Economias novas faturando em 2026', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
+    { nome: 'Total de economias no mês', cls: 'forte', vals: entA, fmt: mais },
     { nome: 'Acumulado em 2026', vals: accA, fmt: v => nf0.format(v) },
-    { nome: 'Matrículas novas faturando no mês', cls: 'forte', vals: sl(o.lig), fmt: mais },
+    { nome: 'Total de matrículas no mês', cls: 'forte', vals: sl(o.lig), fmt: mais },
     { nome: 'Matrículas acumuladas em 2026', vals: L1.map((_, i) => (accL += o.lig[i + 1])), fmt: v => nf0.format(v) },
     { nome: 'Economias que deixaram de faturar (só para conhecimento)', cls: 'info', vals: L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]), fmt: v => nf0.format(v) },
     { nome: 'Economias que voltaram a faturar (não somadas)', cls: 'mudo', vals: sl(o.ree), fmt: v => nf0.format(v) }
@@ -1022,13 +1022,13 @@ function renderResumo(){
   const ltParte = (ex, nv, oque) => `${nf0.format(ex)} já existiam na base<br>${nf0.format(nv)} ${oque} novas faturando`;
   const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
   const LT = {
-    eco: { nota: 'Economias novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as novas na base. No fim, o total do ano.',
+    eco: { nota: 'Economias novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as economias novas faturando em 2026. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ecoTot[0]), 'economias faturando esgoto na base'),
       mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eBase[r], o.eNova[r], 'economias')),
       extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
       tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(sumFrom1(o.eBase), sumFrom1(o.eNova), 'economias')),
       totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
-    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as novas na base. Cada matrícula conta uma vez, no primeiro mês em que passa a faturar economias de esgoto. No fim, o total do ano.',
+    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as matrículas novas faturando em 2026. Cada matrícula conta uma vez, no primeiro mês em que passa a faturar economias de esgoto. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
       mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.lig[r] - o.ligNova[r], o.ligNova[r], 'matrículas')),
       tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(ligAno - sumFrom1(o.ligNova), sumFrom1(o.ligNova), 'matrículas')) },
@@ -1048,13 +1048,13 @@ function renderResumo(){
   let accL2 = 0; const ligAcc = L1.map((_, i) => (accL2 += o.lig[i + 1]));
   $('#blocoEco').dica = { n: L1.length, titulo: i => L1[i], linhas: i => [
     { nome: 'Economias que já existiam na base', valor: nf0.format(o.eBase[i + 1]), cor: '#102840' },
-    { nome: 'Economias novas na base', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
-    { nome: 'Economias novas faturando no mês', valor: mais(entA[i]), cls: 'forte' },
+    { nome: 'Economias novas faturando em 2026', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
+    { nome: 'Total de economias no mês', valor: mais(entA[i]), cls: 'forte' },
     { nome: 'Acumulado em 2026', valor: nf0.format(accA[i]) },
-    { nome: 'Das quais, a mais em matrículas que já faturavam esgoto', valor: nf0.format(o.aum[i + 1]), cls: 'mudo' }, 'sep',
-    { nome: 'Matrículas novas faturando no mês', valor: mais(o.lig[i + 1]), cls: 'forte' },
+    { nome: 'Das quais, economias a mais onde já se faturava esgoto', valor: nf0.format(o.aum[i + 1]), cls: 'mudo' }, 'sep',
+    { nome: 'Total de matrículas no mês', valor: mais(o.lig[i + 1]), cls: 'forte' },
     { nome: 'Matrículas que já existiam na base', valor: nf0.format(o.lig[i + 1] - o.ligNova[i + 1]) },
-    { nome: 'Matrículas novas na base', valor: nf0.format(o.ligNova[i + 1]) },
+    { nome: 'Matrículas novas faturando em 2026', valor: nf0.format(o.ligNova[i + 1]) },
     { nome: 'Matrículas acumuladas em 2026', valor: nf0.format(ligAcc[i]) }, 'sep',
     { nome: 'Economias que deixaram de faturar (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
     { nome: 'Economias que voltaram a faturar (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
@@ -1092,7 +1092,7 @@ function renderResumo(){
   $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas com ULTIMO_CONTRATO = SIM em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}; ` +
     `${nf0.format(s.naoUltimo)} linhas de contratos anteriores desconsideradas. Economias novas faturando: Qtd_eco_fat_esgoto que passou a faturar em 2026, ` +
     `pela troca do TIPO_FATURAMENTO de AGUA para AGUA E ESGOTO ou por mais economias de esgoto faturadas. Matrículas novas faturando: as matrículas dessas economias, ` +
-    `uma vez cada, no primeiro mês. Novas na base: aparecem pela primeira vez em 2026 já com AGUA E ESGOTO. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
+    `uma vez cada, no primeiro mês. Separação por origem: já existiam na base, ou novas faturando de matrículas que aparecem pela primeira vez em 2026 já com AGUA E ESGOTO. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
     (s.ignoradas.length ? ` Abas sem a coluna NUM_LIGACAO, ignoradas: ${s.ignoradas.join(', ')}.` : '');
 }
