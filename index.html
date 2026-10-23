@@ -75,6 +75,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .card h2{font-size:14px;font-weight:600;margin:0 0 2px;color:var(--marinho);letter-spacing:-.005em}
 .nota-secao{margin:0 0 8px;color:var(--azul-claro);font-size:12px;line-height:1.4}
 .card-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 16px;flex-wrap:wrap}
+.card-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--azul-claro)}
 .legenda i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 
@@ -93,9 +94,9 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 
 
 /* ===== Linha do tempo ===== */
-/* subgrid: cada bloco (mês, economias, ligações, faturamento) fica na mesma linha em todas as colunas */
-.lt{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));grid-template-rows:repeat(6,auto);min-width:1100px;margin-top:6px}
-.lt-col{display:grid;grid-row:1 / span 6;grid-template-rows:subgrid;padding-right:10px;min-width:0}
+/* subgrid: cada bloco (marco, valores do mês, complemento) fica na mesma linha em todas as colunas */
+.lt{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr)) minmax(0,1.3fr);grid-template-rows:repeat(3,auto);min-width:1100px;margin-top:6px}
+.lt-col{display:grid;grid-row:1 / span 3;grid-template-rows:subgrid;padding-right:10px;min-width:0}
 .lt-marco{position:relative;height:14px;margin:0 -10px 8px 0}
 .lt-marco::before{content:'';position:absolute;left:0;right:0;top:6px;border-top:2px solid var(--linha)}
 .lt-marco i{position:absolute;left:0;top:2px;width:10px;height:10px;border-radius:50%;background:var(--azul)}
@@ -103,6 +104,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .lt-col:nth-last-child(2) .lt-marco::before{right:10px}
 .lt p{margin:0}
 .lt-mes{font-family:var(--fonte-cond);font-size:12.5px;font-weight:600;color:var(--azul-claro)}
+.lt.lt-fat .lt-val{font-size:18px}
 .lt-val{font-family:var(--fonte-cond);font-size:24px;font-weight:700;color:var(--marinho);line-height:1.15;font-variant-numeric:tabular-nums}
 .lt-rot{font-size:11.5px;color:var(--azul-claro);line-height:1.3}
 .lt-det{font-size:11.5px;color:#334155;line-height:1.35;margin-top:6px;font-variant-numeric:tabular-nums}
@@ -225,7 +227,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.7</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.8</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -271,18 +273,27 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="kpis-grid" id="kpis"></div>
 
     <div class="card">
-      <h2>Linha do tempo de 2026</h2>
-      <p class="nota-secao">Economias e ligações que passaram a faturar esgoto em cada mês, separadas entre as que já estavam na base e as matrículas novas, o faturamento de esgoto dessas economias e o faturamento de esgoto total do mês. No fim, o total do ano.</p>
+      <div class="card-topo">
+        <div>
+          <h2>Linha do tempo de 2026</h2>
+          <p class="nota-secao" id="ltNota"></p>
+        </div>
+        <div class="toggle" role="group" aria-label="Indicador da linha do tempo">
+          <button type="button" class="active" data-lt="eco" aria-pressed="true">Economias</button>
+          <button type="button" data-lt="mat" aria-pressed="false">Matrículas</button>
+          <button type="button" data-lt="fat" aria-pressed="false">Faturamento</button>
+        </div>
+      </div>
       <div class="bloco-rolagem"><div class="lt" id="linhaTempo"></div></div>
     </div>
 
     <div class="card">
       <div class="card-topo">
         <div>
-          <h2>Economias que passaram a faturar esgoto, por mês</h2>
-          <p class="nota-secao">Economias das ligações que já estavam na base e passaram de AGUA para AGUA E ESGOTO e das matrículas novas que já entraram como AGUA E ESGOTO. Cada ligação conta só na primeira vez em 2026. Aumento de economias em ligações com esgoto também soma, no grupo da ligação. Saídas não são descontadas.</p>
+          <h2>Economias novas faturando esgoto, por mês</h2>
+          <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram de AGUA para AGUA E ESGOTO ou tiveram mais economias de esgoto faturadas) e as novas na base, que já entraram como AGUA E ESGOTO. As que deixaram de faturar não são descontadas.</p>
         </div>
-        <div class="legenda"><span><i style="background:var(--marinho)"></i>Ligações que já estavam na base</span><span><i style="background:var(--azul)"></i>Matrículas novas já com AGUA E ESGOTO</span></div>
+        <div class="legenda"><span><i style="background:var(--marinho)"></i>Já existiam na base</span><span><i style="background:var(--azul)"></i>Novas na base</span></div>
       </div>
       <div class="bloco-rolagem"><div class="bloco" id="blocoEco"></div></div>
     </div>
@@ -291,9 +302,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="card-topo">
         <div>
           <h2>Faturamento de esgoto por mês</h2>
-          <p class="nota-secao">Total faturado de esgoto, separado entre o que já existia em dez/25 e o que vem das economias que passaram a faturar em 2026. Quando a ligação já pagava e aumentou economias, entra como novo só a parte proporcional às economias acrescentadas.</p>
+          <p class="nota-secao">Total faturado de esgoto, separado entre as economias que já faturavam em dez/25 e as economias novas faturando em 2026. Quando a matrícula já faturava esgoto e passou a faturar mais economias, entra só a parte proporcional às economias acrescentadas.</p>
         </div>
-        <div class="legenda"><span><i style="background:var(--existente)"></i>Economias que já existiam</span><span><i style="background:var(--marinho)"></i>Economias novas de 2026</span></div>
+        <div class="legenda"><span><i style="background:var(--existente)"></i>Economias que já faturavam</span><span><i style="background:var(--marinho)"></i>Economias novas faturando em 2026</span></div>
       </div>
       <div class="bloco-rolagem"><div class="bloco" id="blocoFat"></div></div>
     </div>
@@ -301,9 +312,12 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="card">
       <div class="card-topo">
         <div><h2>Por cidade</h2><p class="nota-secao" id="lCid"></p></div>
+        <div class="card-acoes">
+        <div class="filtro-wrap" id="fCidTab"></div>
         <div class="toggle" role="group" aria-label="Indicador das tabelas">
           <button type="button" class="active" data-metric="eco" aria-pressed="true">Economias</button>
           <button type="button" data-metric="fat" aria-pressed="false">Faturamento (R$)</button>
+        </div>
         </div>
       </div>
       <div class="tabela-wrap" id="tblCid"></div>
@@ -325,9 +339,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
         <label class="field">Movimento do esgoto
           <select id="cMov">
             <option value="all">Todas as matrículas</option>
-            <option value="entrou_ano">Passou a faturar esgoto em 2026 (ligações do Resumo)</option>
+            <option value="entrou_ano">Novas faturando esgoto em 2026 (as matrículas do Resumo)</option>
             <option value="saiu_ano">Deixou de faturar esgoto em algum mês</option>
-            <option value="entrou_mes">Passou a faturar esgoto em um mês</option>
+            <option value="entrou_mes">Novas faturando esgoto em um mês</option>
             <option value="saiu_mes">Deixou de pagar em um mês</option>
             <option value="diverg">Economias de esgoto divergentes</option>
             <option value="aumentou">Aumentou economias de esgoto</option>
@@ -650,7 +664,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.7';
+const VERSAO_SITE = '1.8';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -665,7 +679,7 @@ const signed = (v, f) => Math.abs(v) < 0.005 ? f(0) : (v > 0 ? '+' : '−') + f(
 const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 
 let D = null;
-const st = { cidSel: null, subSel: null, metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
+const st = { cidSel: null, subSel: null, cidTab: null, lt: 'eco', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
   { k: 'grp', h: 'COD_GRUPO', l: 'Grupo' },
@@ -764,6 +778,7 @@ function setData(d){
   st.cidSel = null; st.subSel = null; st.page = 0;
   montaFiltro('fCid', 'Cidade', D.dict.cid, 'cidSel');
   montaFiltro('fSub', 'Sub-categoria', D.dict.sub, 'subSel');
+  montaFiltro('fCidTab', 'Cidades na tabela', D.dict.cid, 'cidTab');
   const first = refLabel(D.refs[0]), last = refLabel(D.refs[D.refs.length - 1]);
   const dt = new Date(D.meta.carregadoEm);
   $('#status').textContent = `${first} a ${last} · carregado em ${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -968,14 +983,14 @@ function renderResumo(){
   const mais = v => (v > 0 ? '+' : '') + nf0.format(v);
 
   $('#kpis').innerHTML = [
-    { t: 'Economias novas em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
-    { t: 'Ligações que passaram a faturar esgoto em 2026', v: mais(ligAno), d: 'as mesmas das economias novas', c: 'destaque' },
+    { t: 'Economias novas faturando esgoto em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
+    { t: 'Matrículas novas faturando esgoto em 2026', v: mais(ligAno), d: 'já existiam ou novas na base', c: 'destaque' },
     { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `economias, em ${L} meses` },
-    { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'mais economias novas' },
-    { t: `Fat. esgoto das novas em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do faturamento de esgoto` },
-    { t: 'Fat. esgoto das novas no ano', v: brl0.format(fatAno), d: `soma de ${labels[1]} a ${last}` },
+    { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'maior entrada de economias' },
+    { t: `Fat. esgoto das economias novas faturando em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do total de esgoto` },
+    { t: 'Fat. esgoto das economias novas faturando no ano', v: brl0.format(fatAno), d: `soma de ${labels[1]} a ${last}` },
     { t: `Fat. esgoto total em ${last}`, v: brl0.format(o.fatTot[L]), d: `${signed(varFat, x => nf1.format(x))}% sobre ${first}` },
-    { t: 'Saídas (só para conhecimento)', v: nf0.format(sai), d: 'economias, não descontadas', c: 'negativo' }
+    { t: 'Economias que deixaram de faturar', v: nf0.format(sai), d: 'só para conhecimento', c: 'negativo' }
   ].map(x => `<div class="kpi-card ${x.c || ''}"><h3 title="${esc(x.t)}">${x.t}</h3><p class="kpi-valor">${x.v}</p><p class="kpi-delta">${x.d}</p></div>`).join('');
 
 
@@ -984,94 +999,106 @@ function renderResumo(){
   const entA = L1.map((_, i) => ent(i + 1));
   let acc = 0, accL = 0; const accA = entA.map(v => (acc += v));
   $('#blocoEco').innerHTML = graficoAlinhado(L1, [
-    { nome: 'Ligações que já estavam na base', values: sl(o.eBase), cor: '#102840', corTexto: '#fff' },
-    { nome: 'Matrículas novas já com AGUA E ESGOTO', values: sl(o.eNova), cor: '#176b9c', corTexto: '#fff' }
-  ], { fmt: mais, fmtIn: v => nf0.format(v), aria: 'Economias que passaram a faturar esgoto por mês' }) +
+    { nome: 'Já existiam na base', values: sl(o.eBase), cor: '#102840', corTexto: '#fff' },
+    { nome: 'Novas na base', values: sl(o.eNova), cor: '#176b9c', corTexto: '#fff' }
+  ], { fmt: mais, fmtIn: v => nf0.format(v), aria: 'Economias novas faturando esgoto por mês' }) +
   tabelaAlinhada(L1, [
-    { nome: 'Ligações que já estavam na base', cor: 'var(--marinho)', vals: sl(o.eBase), fmt: v => nf0.format(v) },
-    { nome: 'Matrículas novas já com AGUA E ESGOTO', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
-    { nome: 'Economias novas no mês', cls: 'forte', vals: entA, fmt: mais },
+    { nome: 'Economias que já existiam na base', cor: 'var(--marinho)', vals: sl(o.eBase), fmt: v => nf0.format(v) },
+    { nome: 'Economias novas na base', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
+    { nome: 'Economias novas faturando no mês', cls: 'forte', vals: entA, fmt: mais },
     { nome: 'Acumulado em 2026', vals: accA, fmt: v => nf0.format(v) },
-    { nome: 'Ligações que passaram a faturar esgoto', cls: 'forte', vals: sl(o.lig), fmt: mais },
-    { nome: 'Ligações acumuladas em 2026', vals: L1.map((_, i) => (accL += o.lig[i + 1])), fmt: v => nf0.format(v) },
-    { nome: 'Saídas (só para conhecimento)', cls: 'info', vals: L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]), fmt: v => nf0.format(v) },
-    { nome: 'Reentradas (não somadas)', cls: 'mudo', vals: sl(o.ree), fmt: v => nf0.format(v) }
+    { nome: 'Matrículas novas faturando no mês', cls: 'forte', vals: sl(o.lig), fmt: mais },
+    { nome: 'Matrículas acumuladas em 2026', vals: L1.map((_, i) => (accL += o.lig[i + 1])), fmt: v => nf0.format(v) },
+    { nome: 'Economias que deixaram de faturar (só para conhecimento)', cls: 'info', vals: L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]), fmt: v => nf0.format(v) },
+    { nome: 'Economias que voltaram a faturar (não somadas)', cls: 'mudo', vals: sl(o.ree), fmt: v => nf0.format(v) }
   ]);
 
-  // linha do tempo: dez/25 como base, um bloco por mês e o total de 2026 no fim
+  // linha do tempo: dez/25 como base, um bloco por mês e o total de 2026 no fim; o seletor escolhe economias,
+  // matrículas ou faturamento
   const ltK = (k, v, c) => `<p class="lt-k">${k}</p><p class="lt-v ${c || ''}">${v}</p>`;
-  const ltCol = (cls, mes, topo, lig, base) => `<div class="lt-col ${cls}"><div class="lt-marco"><i></i></div><div class="lt-topo"><p class="lt-mes">${mes}</p>${topo}</div>` +
-    `<div class="lt-sep"></div><div class="lt-lig">${lig}</div><div class="lt-sep"></div><div>${base}</div></div>`;
-  const ltEco = (v, eb, en) => `<p class="lt-val">${mais(v)}</p><p class="lt-rot">novas economias com esgoto</p>` +
-    `<p class="lt-det">${nf0.format(eb)} já na base<br>${nf0.format(en)} de matrículas novas</p>`;
-  const ltLig = (v, vn) => `<p class="lt-v pos" style="margin:0">${mais(v)}</p><p class="lt-rot">ligações que passaram a faturar esgoto</p>` +
-    `<p class="lt-det" style="margin-top:2px">${nf0.format(v - vn)} já na base<br>${nf0.format(vn)} matrículas novas</p>`;
-  const lt = $('#linhaTempo'); lt.style.setProperty('--n', nR + 1);
-  lt.innerHTML = labels.map((l, r) => {
-    if (!r) return ltCol('', l, `<p class="lt-val">${nf0.format(o.ecoTot[0])}</p><p class="lt-rot">economias com esgoto na base</p>`,
-      `<p class="lt-v" style="margin:0">${nf0.format(o.ligTot[0])}</p><p class="lt-rot">ligações com esgoto na base</p>`, ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[0])));
-    return ltCol('', l, ltEco(ent(r), o.eBase[r], o.eNova[r]), ltLig(o.lig[r], o.ligNova[r]),
-      ltK('Faturamento das novas', brl0.format(o.fatNovas[r]), 'pos') + ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[r])) +
-      ltK('Deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'));
-  }).join('') + ltCol('total', 'Total 2026', ltEco(total, sumFrom1(o.eBase), sumFrom1(o.eNova)), ltLig(ligAno, sumFrom1(o.ligNova)),
-    ltK('Faturamento das novas no ano', brl0.format(fatAno), 'pos') + ltK('Faturamento de esgoto no ano', brl0.format(sumFrom1(o.fatTot))) +
-    ltK('Deixaram de faturar', nf0.format(sai), 'neg'));
+  const ltCol = (cls, mes, topo, extra) => `<div class="lt-col ${cls}"><div class="lt-marco"><i></i></div>` +
+    `<div class="lt-topo"><p class="lt-mes">${mes}</p>${topo}</div><div>${extra ? '<div class="lt-sep"></div>' + extra : ''}</div></div>`;
+  const ltVal = (v, rot, det) => `<p class="lt-val">${v}</p><p class="lt-rot">${rot}</p>${det ? `<p class="lt-det">${det}</p>` : ''}`;
+  const ltParte = (ex, nv, oque) => `${nf0.format(ex)} já existiam na base<br>${nf0.format(nv)} ${oque} novas na base`;
+  const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
+  const LT = {
+    eco: { nota: 'Economias novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as novas na base. No fim, o total do ano.',
+      base: () => ltVal(nf0.format(o.ecoTot[0]), 'economias faturando esgoto na base'),
+      mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eBase[r], o.eNova[r], 'economias')),
+      extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
+      tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(sumFrom1(o.eBase), sumFrom1(o.eNova), 'economias')),
+      totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
+    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as novas na base. Cada matrícula conta uma vez, no primeiro mês em que passa a faturar economias de esgoto. No fim, o total do ano.',
+      base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
+      mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.lig[r] - o.ligNova[r], o.ligNova[r], 'matrículas')),
+      tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(ligAno - sumFrom1(o.ligNova), sumFrom1(o.ligNova), 'matrículas')) },
+    fat: { nota: 'Faturamento de esgoto das economias novas faturando em cada mês e o faturamento de esgoto total do mês. No fim, a soma do ano.',
+      base: () => ltVal(brl0.format(o.fatTot[0]), 'faturamento de esgoto do mês'),
+      mes: r => ltVal(brl0.format(o.fatNovas[r]), 'das economias novas faturando', fatPart(r)),
+      extra: r => ltK('Faturamento de esgoto do mês', brl0.format(o.fatTot[r])),
+      tot: () => ltVal(brl0.format(fatAno), 'das economias novas faturando no ano'),
+      totExtra: () => ltK('Faturamento de esgoto no ano', brl0.format(sumFrom1(o.fatTot))) }
+  }[st.lt];
+  $('#ltNota').textContent = LT.nota;
+  const lt = $('#linhaTempo'); lt.style.setProperty('--n', nR); lt.classList.toggle('lt-fat', st.lt === 'fat');
+  lt.innerHTML = labels.map((l, r) => r ? ltCol('', l, LT.mes(r), LT.extra && LT.extra(r)) : ltCol('', l, LT.base(), '')).join('') +
+    ltCol('total', 'Total 2026', LT.tot(), LT.totExtra && LT.totExtra());
 
   const saiA = L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]);
   let accL2 = 0; const ligAcc = L1.map((_, i) => (accL2 += o.lig[i + 1]));
   $('#blocoEco').dica = { n: L1.length, titulo: i => L1[i], linhas: i => [
-    { nome: 'Ligações que já estavam na base', valor: nf0.format(o.eBase[i + 1]), cor: '#102840' },
-    { nome: 'Matrículas novas', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
-    { nome: 'Economias novas no mês', valor: mais(entA[i]), cls: 'forte' },
-    { nome: 'Acumulado em 2026', valor: nf0.format(accA[i]) }, 'sep',
-    { nome: 'Ligações que passaram a faturar esgoto', valor: mais(o.lig[i + 1]), cls: 'forte' },
-    { nome: 'Já estavam na base', valor: nf0.format(o.lig[i + 1] - o.ligNova[i + 1]) },
-    { nome: 'Matrículas novas', valor: nf0.format(o.ligNova[i + 1]) },
-    { nome: 'Acumuladas em 2026', valor: nf0.format(ligAcc[i]) }, 'sep',
-    { nome: 'Economias acrescentadas em ligações que já tinham esgoto', valor: nf0.format(o.aum[i + 1]) },
-    { nome: 'Ligações que já tinham esgoto e aumentaram (inclui repetidas)', valor: nf0.format(o.ligAum[i + 1]) }, 'sep',
-    { nome: 'Saídas (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
-    { nome: 'Reentradas (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
+    { nome: 'Economias que já existiam na base', valor: nf0.format(o.eBase[i + 1]), cor: '#102840' },
+    { nome: 'Economias novas na base', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
+    { nome: 'Economias novas faturando no mês', valor: mais(entA[i]), cls: 'forte' },
+    { nome: 'Acumulado em 2026', valor: nf0.format(accA[i]) },
+    { nome: 'Das quais, a mais em matrículas que já faturavam esgoto', valor: nf0.format(o.aum[i + 1]), cls: 'mudo' }, 'sep',
+    { nome: 'Matrículas novas faturando no mês', valor: mais(o.lig[i + 1]), cls: 'forte' },
+    { nome: 'Matrículas que já existiam na base', valor: nf0.format(o.lig[i + 1] - o.ligNova[i + 1]) },
+    { nome: 'Matrículas novas na base', valor: nf0.format(o.ligNova[i + 1]) },
+    { nome: 'Matrículas acumuladas em 2026', valor: nf0.format(ligAcc[i]) }, 'sep',
+    { nome: 'Economias que deixaram de faturar (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
+    { nome: 'Economias que voltaram a faturar (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
   ] };
 
   // faturamento de esgoto por mês: existente + novas
   const exist = labels.map((_, r) => Math.max(0, o.fatTot[r] - o.fatNovas[r])), novas = [...o.fatNovas];
   $('#blocoFat').innerHTML = graficoAlinhado(labels, [
-    { nome: 'Economias que já existiam', values: exist, cor: '#BCD0E1', corTexto: '#102840' },
-    { nome: 'Economias novas de 2026', values: novas, cor: '#102840', corTexto: '#fff' }
-  ], { money: true, h: 270, fmt: v => brl0.format(v), fmtIn: v => nf0.format(v), aria: 'Faturamento de esgoto por mês, existente e novas economias' }) +
+    { nome: 'Economias que já faturavam', values: exist, cor: '#BCD0E1', corTexto: '#102840' },
+    { nome: 'Economias novas faturando em 2026', values: novas, cor: '#102840', corTexto: '#fff' }
+  ], { money: true, h: 270, fmt: v => brl0.format(v), fmtIn: v => nf0.format(v), aria: 'Faturamento de esgoto por mês, economias que já faturavam e novas faturando' }) +
   tabelaAlinhada(labels, [
-    { nome: 'Economias que já existiam', cor: 'var(--existente)', vals: exist, fmt: v => brl0.format(v) },
-    { nome: 'Economias novas de 2026', cor: 'var(--marinho)', vals: novas, fmt: v => brl0.format(v) },
+    { nome: 'Economias que já faturavam', cor: 'var(--existente)', vals: exist, fmt: v => brl0.format(v) },
+    { nome: 'Economias novas faturando em 2026', cor: 'var(--marinho)', vals: novas, fmt: v => brl0.format(v) },
     { nome: 'Faturamento de esgoto total', cls: 'forte', vals: [...o.fatTot], fmt: v => brl0.format(v) },
-    { nome: 'Participação das novas', vals: labels.map((_, r) => o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0), fmt: v => nf1.format(v) + '%' },
+    { nome: 'Participação das novas faturando', vals: labels.map((_, r) => o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0), fmt: v => nf1.format(v) + '%' },
     { nome: 'Economias com esgoto faturadas', cls: 'mudo', vals: [...o.ecoTot], fmt: v => nf0.format(v) }
   ]);
 
   $('#blocoFat').dica = { n: labels.length, titulo: i => labels[i], linhas: r => [
-    { nome: 'Economias que já existiam', valor: brl0.format(exist[r]), cor: '#BCD0E1' },
-    { nome: 'Economias novas de 2026', valor: brl0.format(novas[r]), cor: '#102840' },
+    { nome: 'Economias que já faturavam', valor: brl0.format(exist[r]), cor: '#BCD0E1' },
+    { nome: 'Economias novas faturando em 2026', valor: brl0.format(novas[r]), cor: '#102840' },
     { nome: 'Faturamento de esgoto total', valor: brl0.format(o.fatTot[r]), cls: 'forte' },
-    { nome: 'Participação das novas', valor: nf1.format(o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0) + '%' }, 'sep',
+    { nome: 'Participação das novas faturando', valor: nf1.format(o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0) + '%' }, 'sep',
     { nome: 'Economias com esgoto faturadas', valor: nf0.format(o.ecoTot[r]), cls: 'mudo' }
   ] };
 
   const money = st.metric === 'fat';
-  segTable($('#tblCid'), o.cidUsed, D.dict.cid, money ? o.cidF : o.cidE, o.cidS, money, 'Cidade', 'sortCid');
+  segTable($('#tblCid'), o.cidUsed, D.dict.cid, money ? o.cidF : o.cidE, o.cidS, money, 'Cidade', 'sortCid', st.cidTab);
   segTable($('#tblSub'), o.subUsed, D.dict.sub, money ? o.subF : o.subE, o.subS, money, 'Sub-categoria', 'sortSub');
-  const txt = money ? 'Faturamento de esgoto das economias novas de 2026 em cada mês e a soma do ano.'
-                    : 'Economias que passaram a faturar esgoto em cada mês e o total do ano. Saídas só para conhecimento.';
-  $('#lCid').textContent = txt + ' Clique nos títulos para ordenar.'; $('#lSub').textContent = txt + ' O seletor Economias / Faturamento fica no quadro por cidade.';
+  const txt = money ? 'Faturamento de esgoto das economias novas faturando em 2026, em cada mês e a soma do ano.'
+                    : 'Economias novas faturando esgoto em cada mês e o total do ano. As que deixaram de faturar aparecem só para conhecimento.';
+  $('#lCid').textContent = txt + ' Escolha as cidades em "Cidades na tabela" e clique nos títulos para ordenar.'; $('#lSub').textContent = txt + ' O seletor Economias / Faturamento fica no quadro por cidade.';
   const s = D.stats;
   $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas com ULTIMO_CONTRATO = SIM em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}; ` +
-    `${nf0.format(s.naoUltimo)} linhas de contratos anteriores desconsideradas. Passar ou deixar de faturar esgoto é medido pela troca do TIPO_FATURAMENTO entre AGUA e AGUA E ESGOTO. ` +
-    `Quem já pagava em ${first} e voltou depois de sair conta como reentrada.` +
+    `${nf0.format(s.naoUltimo)} linhas de contratos anteriores desconsideradas. Economias novas faturando: Qtd_eco_fat_esgoto que passou a faturar em 2026, ` +
+    `pela troca do TIPO_FATURAMENTO de AGUA para AGUA E ESGOTO ou por mais economias de esgoto faturadas. Matrículas novas faturando: as matrículas dessas economias, ` +
+    `uma vez cada, no primeiro mês. Novas na base: aparecem pela primeira vez em 2026 já com AGUA E ESGOTO. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
     (s.ignoradas.length ? ` Abas sem a coluna NUM_LIGACAO, ignoradas: ${s.ignoradas.join(', ')}.` : '');
 }
-function segTable(el, used, names, T, S, money, title, sortKey){
+function segTable(el, used, names, T, S, money, title, sortKey, sel){
   const nR = D.refs.length, labels = D.refs.map(refLabel), nS = names.length;
-  let rows = []; for (let s = 0; s < nS; s++) if (used[s]) rows.push(s);
+  let rows = []; for (let s = 0; s < nS; s++) if (used[s] && (!sel || sel.has(s))) rows.push(s);
   const tot = s => { let t = 0; for (let r = 1; r < nR; r++) t += T[s * nR + r]; return t; };
   const sorters = { nome: (a, b) => names[a].localeCompare(names[b], 'pt-BR'), tot: (a, b) => tot(b) - tot(a), out: (a, b) => S[b] - S[a] };
   rows.sort(sorters[st[sortKey]] || sorters.tot);
@@ -1084,13 +1111,13 @@ function segTable(el, used, names, T, S, money, title, sortKey){
     return h + `<td class="tot">${f(t)}</td>` + (money ? '' : `<td class="info">${nf0.format(out)}</td>`) + '</tr>';
   };
   const th = (key, text) => `<th class="sortable" data-sort="${key}" data-key="${sortKey}">${text}</th>`;
-  el.innerHTML = `<table class="tab-seg"><thead><tr>${th('nome', title)}${labels.slice(1).map(l => `<th>${l}</th>`).join('')}${th('tot', money ? 'Soma 2026' : 'Total 2026')}${money ? '' : th('out', 'Saídas (conhecimento)')}</tr></thead><tbody>` +
+  el.innerHTML = `<table class="tab-seg"><thead><tr>${th('nome', title)}${labels.slice(1).map(l => `<th>${l}</th>`).join('')}${th('tot', money ? 'Soma 2026' : 'Total 2026')}${money ? '' : th('out', 'Deixaram de faturar (conhecimento)')}</tr></thead><tbody>` +
     rows.map(s => linha(names[s] || '(vazio)', r => T[s * nR + r], S[s])).join('') +
     linha('Total', r => sum[r], sS, true) + '</tbody></table>';
 }
 
 /* ---------- Consolidado ---------- */
-const YSTAT = ['Sem esgoto', 'Já pagava', 'Passou a faturar em 2026', 'Deixou de faturar em 2026', 'Já pagava e aumentou economias em 2026', 'AGUA E ESGOTO sem economias de esgoto faturadas'];
+const YSTAT = ['Sem esgoto', 'Já faturava', 'Nova faturando em 2026', 'Deixou de faturar em 2026', 'Já faturava e passou a faturar mais economias em 2026', 'AGUA E ESGOTO sem economias de esgoto faturadas'];
 const YCLS = ['', '', 'pos', 'neg', 'pos', ''];
 function buildChips(){
   $('#chips').innerHTML = FIELDS.map(f => `<button type="button" class="chip" data-f="${f.k}" aria-pressed="${visible.has(f.k)}">${f.l}</button>`).join('');
@@ -1164,7 +1191,7 @@ function renderCons(recalc){
   const k = keepMask(), L = nR - 1; let dL = 0;
   for (let m = 0, n = D.mats.length; m < n; m++) if (k[m] && D.div[m * nR + L]) dL++;
   $('#divNote').hidden = !dL;
-  if (dL) $('#divTxt').textContent = `⚠ Em ${labels[L]}, ${nf0.format(dL)} ligações têm economias de esgoto diferentes do total de economias, ou economias de esgoto sem faturamento de esgoto.`;
+  if (dL) $('#divTxt').textContent = `⚠ Em ${labels[L]}, ${nf0.format(dL)} matrículas têm economias de esgoto diferentes do total de economias, ou economias de esgoto sem faturamento de esgoto.`;
   $('#pInfo').textContent = `Página ${st.page + 1} de ${nf0.format(pages)}`;
   $('#pPrev').disabled = st.page === 0; $('#pNext').disabled = st.page >= pages - 1;
   let h = '<table><thead><tr>' + FIXED.map((t, i) => `<th class="txt${i === 1 ? ' c2' : ''}" rowspan="2">${t}</th>`).join('');
@@ -1293,6 +1320,11 @@ $('#btnClear').onclick = async () => {
 };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
+document.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => {
+  st.lt = b.dataset.lt;
+  document.querySelectorAll('[data-lt]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+  renderResumo();
+});
 document.querySelectorAll('[data-metric]').forEach(b => b.onclick = () => {
   st.metric = b.dataset.metric;
   document.querySelectorAll('[data-metric]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });

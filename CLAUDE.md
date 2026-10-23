@@ -99,6 +99,14 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Faturamento existente:** faturamento de esgoto total do mês menos o faturamento das economias novas.
 - **Divergências:** aparecem numa linha discreta no Consolidado (desde a v1.7; no Resumo o usuário achou grande demais), contadas por ligação no último mês, com o link "Ver só as divergentes" que aplica o filtro.
 
+## Vocabulário da interface (definido na v1.8)
+
+- **"Novas" é sempre "novas faturando":** as economias e matrículas não são necessariamente novas na base, e sim novas faturando esgoto. Use "economias novas faturando esgoto" e "matrículas novas faturando esgoto", em indicadores, gráficos, linha do tempo e tabelas.
+- **Não misture economias com matrículas no mesmo texto.** A divisão de origem é dita na própria unidade: "X já existiam na base" e "Y economias novas na base" (ou "Y matrículas novas na base"). Nos gráficos e legendas: "Já existiam na base" e "Novas na base".
+- **Faturamento:** "economias que já faturavam" e "economias novas faturando em 2026".
+- **Saídas:** "economias que deixaram de faturar" (só para conhecimento) e "economias que voltaram a faturar" (não somadas).
+- **"Ligação" não aparece no Resumo;** a unidade de contagem é a matrícula.
+
 ## Layout atual
 
 O estilo copia o **painel de faturamento** do usuário (repositório painel-faturamento-unificado).
@@ -118,29 +126,31 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
 ### Resumo
 
 1. **Faixa de 8 indicadores:**
-   - economias novas em 2026, em destaque;
-   - ligações que passaram a faturar esgoto em 2026, em destaque (títulos dos indicadores quebram em até 2 linhas);
+   - economias novas faturando esgoto em 2026, em destaque;
+   - matrículas novas faturando esgoto em 2026, em destaque (títulos dos indicadores quebram em até 2 linhas);
    - média por mês;
    - melhor mês;
    - faturamento de esgoto das novas no último mês, com a participação no total;
    - faturamento das novas somado no ano;
    - faturamento de esgoto total no último mês, com a variação sobre dez/25;
-   - saídas, com borda laranja.
-2. **Cartão "Linha do tempo de 2026"**, recriado a partir do print do painel antigo, na paleta clara:
-   - dez/25: economias e ligações com esgoto na base e faturamento de esgoto do mês;
-   - cada mês: economias novas e ligações que passaram a faturar esgoto, as duas separadas entre já na base e matrículas novas, faturamento das novas (azul), faturamento de esgoto do mês e as que deixaram de faturar (laranja);
-   - última coluna "Total 2026", com fundo tint: os mesmos itens somados no ano;
-   - os blocos ficam alinhados entre as colunas com `grid-template-rows: subgrid` (6 linhas por coluna);
+   - economias que deixaram de faturar, com borda laranja.
+2. **Cartão "Linha do tempo de 2026"**, recriado a partir do print do painel antigo, na paleta clara, com um seletor **Economias / Matrículas / Faturamento** (`st.lt`) que mostra uma informação por vez:
+   - Economias: dez/25 com as economias faturando esgoto na base; cada mês com as economias novas faturando, quantas já existiam na base e quantas são novas na base, e as que deixaram de faturar (laranja);
+   - Matrículas: o mesmo com matrículas, sem as que deixaram de faturar;
+   - Faturamento: dez/25 com o faturamento de esgoto do mês; cada mês com o faturamento das economias novas faturando (com a participação no total) e o faturamento de esgoto do mês;
+   - última coluna "Total 2026", mais larga e com fundo tint: os mesmos itens somados no ano;
+   - os blocos ficam alinhados entre as colunas com `grid-template-rows: subgrid` (3 linhas por coluna);
    - não mostra troca e aumento.
-3. **Cartão "Economias que passaram a faturar esgoto, por mês":**
-   - colunas empilhadas pela origem: ligações que já estavam na base em marinho e matrículas novas já com AGUA E ESGOTO em azul;
+3. **Cartão "Economias novas faturando esgoto, por mês":**
+   - colunas empilhadas pela origem: já existiam na base em marinho e novas na base em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
    - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações que passaram a faturar esgoto, ligações acumuladas, saídas e reentradas.
    - **Interativo:** ao passar o mouse (ou tocar) numa coluna, ela fica destacada e uma dica mostra os dados do mês: as duas origens, economias novas, acumulado, ligações que passaram a faturar esgoto (já na base, matrículas novas, acumuladas), economias acrescentadas em ligações que já tinham esgoto e quantas ligações foram, saídas e reentradas. O mesmo vale para o gráfico de faturamento (existente, novas, total, participação e economias com esgoto). A dica é montada por `ligaDica(el)` a partir de `el.dica = { n, titulo, linhas }`, definido em `renderResumo()`.
    - O alinhamento funciona porque o SVG tem `viewBox` de 1000 de largura e área de rótulos de 180, enquanto a tabela usa `table-layout: fixed` com a primeira coluna em 18%. As demais colunas têm larguras iguais nos dois.
 4. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
 5. **Tabelas Por cidade e Por sub-categoria:**
-   - meses, Total 2026 e saídas (só para conhecimento);
+   - meses, Total 2026 e as que deixaram de faturar (só para conhecimento);
+   - na tabela por cidade, o seletor **"Cidades na tabela"** (`st.cidTab`, mesmo componente dos filtros) escolhe as linhas mostradas; o Total soma só as cidades escolhidas e os indicadores não mudam;
    - um seletor Economias / Faturamento (R$), que fica no cartão de cidade e vale para as duas;
    - ordenação ao clicar nos títulos.
 6. **Rodapé** com a origem da base, as linhas desconsideradas e a regra de medição.
