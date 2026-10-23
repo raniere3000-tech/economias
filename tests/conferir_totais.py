@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 
 arq = sys.argv[1] if len(sys.argv) > 1 else 'base_teste.xlsx'
 wb = load_workbook(arq, read_only=True)
-T, Q, F = (collections.defaultdict(dict) for _ in range(3))
+T, Q, F, E = (collections.defaultdict(dict) for _ in range(4))
 refs = set(); prio = {}; repetidas = 0
 for ws in wb.worksheets:
     cab = None
@@ -28,6 +28,7 @@ for ws in wb.worksheets:
         Q[m][k] = int(g('Qtd_eco_fat_esgoto') or 0)
         T[m][k] = Q[m][k] > 0  # faturando esgoto no mês; o TIPO_FATURAMENTO é o atual e não entra na conta
         F[m][k] = float(g('Faturamento_bruto_direta_esgoto') or 0)
+        E[m][k] = int(g('Eco_total') or 0)
 refs = sorted(refs); n = len(refs)
 k0 = refs[0]
 base_mat = sum(1 for m in T if T[m].get(k0))
@@ -88,12 +89,18 @@ for arq in sys.argv[2:]:
     lws = load_workbook(arq, read_only=True).worksheets[0]
     linhas = list(lws.iter_rows(values_only=True)); cab = {c: i for i, c in enumerate(linhas[0]) if c}
     mats = list(dict.fromkeys(r[cab['NUM_LIGACAO']] for r in linhas[1:] if r[0] is not None))
+    lq = {r[cab['NUM_LIGACAO']]: (r[cab['Qtd_eco_fat_esgoto']] if 'Qtd_eco_fat_esgoto' in cab else 0) or (r[cab['Eco_total']] if 'Eco_total' in cab else 0) or 0
+          for r in linhas[1:] if r[0] is not None}
     # mês previsto: o mês do nome, procurado entre as referências de 2026 da base (o ano da planilha não é usado)
     alvo = max(k for k in refs[1:] if k[1] == mes); ano = alvo[0]
-    cat = collections.Counter()
+    cat, eco = collections.Counter(), collections.Counter()
     for m in mats:
         p = pri.get(m, 'fora') if m in T else 'fora'
-        cat['não está na base' if p == 'fora' else 'ainda não faturou' if p is None else 'já faturava em ' + rot[0] if p == refs[0]
-            else 'no mês previsto' if p == alvo else 'antes' if p < alvo else 'depois'] += 1
+        c = ('não está na base' if p == 'fora' else 'ainda não faturou' if p is None else 'já faturava em ' + rot[0] if p == refs[0]
+             else 'no mês previsto' if p == alvo else 'antes' if p < alvo else 'depois')
+        cat[c] += 1
+        # visão Economias: esgoto no primeiro mês faturando; quem não faturou, Eco_total do último mês; fora da base, a lista
+        eco[c] += lq[m] if p == 'fora' else Q[m][p] if p else E[m][max(E[m])]
     eco_b = sum(Q[m].get(alvo, 0) for m in mats if m in T)
     print(f'Lista {os.path.basename(arq)} ({mes:02d}/{ano}): {len(mats)} matrículas', dict(cat), f'economias faturadas na base no mês previsto: {eco_b}')
+    print('   economias por situação:', dict(eco), 'total', sum(eco.values()))

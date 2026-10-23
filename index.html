@@ -235,7 +235,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.19</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.20</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -318,9 +318,15 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="card-topo">
         <div>
           <h2>Comparativo com as listas de virar para Água e Esgoto</h2>
-          <p class="nota-secao">Matrículas das planilhas “Virar para Água e Esgoto”, comparadas pelo primeiro mês em que aparecem faturando esgoto na base. As listas não entram nos totais do painel. Clique num número para ver as matrículas no Consolidado.</p>
+          <p class="nota-secao" id="lListas"></p>
         </div>
-        <div class="card-acoes"><button class="btn-just" id="btnListas" type="button">⬇ Baixar comparativo</button></div>
+        <div class="card-acoes">
+          <div class="toggle" role="group" aria-label="Visão do comparativo">
+            <button type="button" class="active" data-lsv="mat" aria-pressed="true">Matrículas</button>
+            <button type="button" data-lsv="eco" aria-pressed="false">Economias</button>
+          </div>
+          <button class="btn-just" id="btnListas" type="button">⬇ Baixar comparativo</button>
+        </div>
       </div>
       <div class="tabela-wrap" id="tblListas"></div>
     </div>
@@ -749,7 +755,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.19';
+const VERSAO_SITE = '1.20';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -764,7 +770,7 @@ const signed = (v, f) => Math.abs(v) < 0.005 ? f(0) : (v > 0 ? '+' : '−') + f(
 const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 
 let D = null;
-const st = { cidSel: null, subSel: null, cidTab: null, lt: 'eco', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
+const st = { cidSel: null, subSel: null, cidTab: null, lt: 'eco', lsv: 'mat', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
   { k: 'grp', h: 'COD_GRUPO', l: 'Grupo' },
@@ -1324,21 +1330,21 @@ async function exportCsv(){
   if (!list.length){ toast('Não há matrículas para exportar com esses filtros.'); return; }
   bloqueia(true); prog(true, 'Gerando o CSV', `${nf0.format(list.length)} matrículas`, 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'ESGOTO_2026'];
+  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'ESGOTO_2026', 'PRIMEIRO_MES_FATURANDO_ESGOTO'];
   labels.forEach(l => FIELDS.forEach(f => head.push(`${f.h} ${l}`)));
-  head.push('PRIMEIRO_MES_FATURANDO_ESGOTO', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA', 'LISTAS_VIRAR');
+  head.push('MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA', 'LISTAS_VIRAR');
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   for (let i = 0; i < list.length; i += 5000){
     let chunk = '';
     for (let x = i; x < Math.min(list.length, i + 5000); x++){
       const m = list[x];
-      const row = [D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], YSTAT[D.yStat[m]]].map(q);
+      const row = [D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], YSTAT[D.yStat[m]], D.pri[m] >= 0 ? labels[D.pri[m]] : ''].map(q);
       const dv = [];
       for (let r = 0; r < nR; r++){
         FIELDS.forEach(f => row.push(q(cellVal(f.k, m * nR + r, true))));
         if (D.div[m * nR + r]) dv.push(labels[r]);
       }
-      row.push(q(D.pri[m] >= 0 ? labels[D.pri[m]] : ''), q(D.ligMes[m] > 0 ? labels[D.ligMes[m]] : ''), q(D.ecoNov[m] || ''), q(changeMonths(m, 1).join(', ')), q(changeMonths(m, 0).join(', ')), q(dv.join(', ')), q(listasDe(m)));
+      row.push(q(D.ligMes[m] > 0 ? labels[D.ligMes[m]] : ''), q(D.ecoNov[m] || ''), q(changeMonths(m, 1).join(', ')), q(changeMonths(m, 0).join(', ')), q(dv.join(', ')), q(listasDe(m)));
       chunk += row.join(';') + '\r\n';
     }
     parts.push(chunk);
@@ -1389,21 +1395,35 @@ function itensFiltrados(c, k){
   const C = st.cidSel, S = st.subSel, ci = new Map(D.dict.cid.map((v, i) => [v, i])), si = new Map(D.dict.sub.map((v, i) => [v, i]));
   return c.itens.filter(t => t.m >= 0 ? k[t.m] : (!C || C.has(ci.get(c.L.cid[t.i]))) && (!S || S.has(si.get(c.L.sub[t.i]))));
 }
+// economias de uma matrícula da lista na visão Economias: as de esgoto faturadas no primeiro mês faturando; quem ainda
+// não faturou, o total de economias no último mês em que aparece; fora da base, as economias da própria lista
+function ecoLista(c, t){
+  const nR = D.refs.length, m = t.m;
+  if (m < 0) return c.L.qe[t.i] || c.L.et[t.i] || 0;
+  if (D.pri[m] >= 0) return D.qe[m * nR + D.pri[m]];
+  for (let r = nR - 1; r >= 0; r--) if (D.present[m * nR + r]) return D.et[m * nR + r];
+  return 0;
+}
 function listasDe(m){ return D.cmp.filter(c => c.sitMat[m] >= 0).map(c => `${c.label}: ${sitNome(c.sitMat[m])}`).join('; '); }
 function renderListas(){
   const card = $('#cardListas'); card.hidden = !D.cmp || !D.cmp.length; if (card.hidden) return;
-  const k = keepMask(), nR = D.refs.length;
+  const k = keepMask(), nR = D.refs.length, eco = st.lsv === 'eco';
+  $('#lListas').textContent = (eco
+    ? 'Economias das matrículas das planilhas “Virar para Água e Esgoto”: de quem começou a faturar, as economias de esgoto faturadas no primeiro mês faturando; de quem ainda não faturou, o total de economias no último mês; fora da base, as economias da lista.'
+    : 'Matrículas das planilhas “Virar para Água e Esgoto”, comparadas pelo primeiro mês em que aparecem faturando esgoto na base.') +
+    ' As listas não entram nos totais do painel. Clique num número para ver as matrículas no Consolidado.';
   const btn = (n, v) => n ? `<button type="button" class="btn-num" data-lista="${v}">${nf0.format(n)}</button>` : '<span class="zero">0</span>';
-  let h = `<table class="tab-seg"><thead><tr><th rowspan="2">Lista</th><th class="grupo" colspan="7">Matrículas</th><th class="grupo" colspan="2">Economias de esgoto</th></tr>
+  let h = `<table class="tab-seg"><thead><tr><th rowspan="2">Lista</th><th class="grupo" colspan="${eco ? 8 : 7}">${eco ? 'Economias' : 'Matrículas'}</th></tr>
     <tr><th>Na lista</th><th>Começaram no mês previsto</th><th>Começaram antes</th><th>Começaram depois</th><th>Já faturavam em ${refLabel(D.refs[0])}</th><th>Ainda não faturaram</th><th>Não estão na base</th>
-    <th>Na lista</th><th>Faturadas na base no mês previsto</th></tr></thead><tbody>`;
+    ${eco ? '<th>De esgoto faturadas na base no mês previsto</th>' : ''}</tr></thead><tbody>`;
   D.cmp.forEach((c, i) => {
-    const it = itensFiltrados(c, k), cnt = [0, 0, 0, 0, 0, 0, 0]; let ecoL = 0, ecoB = 0;
-    it.forEach(t => { cnt[t.sit]++; ecoL += c.L.qe[t.i] || 0; if (t.m >= 0 && c.rL >= 0) ecoB += D.qe[t.m * nR + c.rL]; });
-    h += `<tr><td title="${esc(c.L.arquivos.join(', '))}"><b>${esc(c.label)}</b> <span class="mudo">${esc(c.L.arquivos.join(', '))}</span></td><td class="tot">${nf0.format(it.length)}</td>` +
+    const it = itensFiltrados(c, k), cnt = [0, 0, 0, 0, 0, 0, 0]; let ecoB = 0;
+    it.forEach(t => { cnt[t.sit] += eco ? ecoLista(c, t) : 1; if (eco && t.m >= 0 && c.rL >= 0) ecoB += D.qe[t.m * nR + c.rL]; });
+    const tot = cnt.reduce((a, b) => a + b, 0);
+    h += `<tr><td title="${esc(c.L.arquivos.join(', '))}"><b>${esc(c.label)}</b> <span class="mudo">${esc(c.L.arquivos.join(', '))}</span></td><td class="tot">${nf0.format(tot)}</td>` +
       [0, 1, 2, 3, 4].map(s => `<td>${btn(cnt[s], i + ':' + s)}</td>`).join('') + `<td class="info">${nf0.format(cnt[5])}</td>` +
-      `<td>${nf0.format(ecoL)}</td><td>${c.rL >= 0 ? nf0.format(ecoB) : '–'}</td></tr>`;
-    if (c.rL < 0) h += `<tr><td colspan="10" class="aviso-lista">⚠ Não foi possível identificar o mês previsto de “${esc(c.L.arquivos.join(', '))}” na base: ${nf0.format(cnt[6])} matrículas começaram a faturar esgoto, mas ficam sem comparação. Coloque o nome do mês no nome do arquivo (ex.: “Julho - Virar para Água e Esgoto”).</td></tr>`;
+      (eco ? `<td>${c.rL >= 0 ? nf0.format(ecoB) : '–'}</td>` : '') + '</tr>';
+    if (c.rL < 0) h += `<tr><td colspan="${eco ? 9 : 8}" class="aviso-lista">⚠ Não foi possível identificar o mês previsto de “${esc(c.L.arquivos.join(', '))}” na base: ${nf0.format(cnt[6])} ${eco ? 'economias' : 'matrículas'} começaram a faturar esgoto, mas ficam sem comparação. Coloque o nome do mês no nome do arquivo (ex.: “Julho - Virar para Água e Esgoto”).</td></tr>`;
   });
   $('#tblListas').innerHTML = h + '</tbody></table>';
 }
@@ -1411,14 +1431,14 @@ async function exportListas(){
   const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['LISTA_MES_PREVISTO', 'ARQUIVO', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SITUACAO', 'PRIMEIRO_MES_FATURANDO_ESGOTO',
-    'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_LISTA', 'ECO_ESGOTO_BASE_MES_PREVISTO', 'ECO_ESGOTO_BASE_PRIMEIRO_MES'];
+    'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_LISTA', 'ECO_ESGOTO_BASE_MES_PREVISTO', 'ECO_ESGOTO_BASE_PRIMEIRO_MES', 'ECONOMIAS_COMPARATIVO'];
   let txt = '\ufeff' + head.join(';') + '\r\n', n = 0;
   for (const c of D.cmp){
     for (const t of itensFiltrados(c, k)){
       const m = t.m, L = c.L, dentro = m >= 0;
       txt += [c.label, L.arquivos.join(', '), L.mats[t.i], dentro ? D.nomes[m] : L.nomes[t.i], dentro ? D.dict.cid[D.cid[m]] : L.cid[t.i], dentro ? D.dict.sub[D.sub[m]] : L.sub[t.i],
         sitNome(t.sit), dentro && D.pri[m] >= 0 ? labels[D.pri[m]] : '', dentro && D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', L.qe[t.i] || 0,
-        dentro && c.rL >= 0 ? D.qe[m * nR + c.rL] : '', dentro && D.pri[m] >= 0 ? D.qe[m * nR + D.pri[m]] : ''].map(q).join(';') + '\r\n';
+        dentro && c.rL >= 0 ? D.qe[m * nR + c.rL] : '', dentro && D.pri[m] >= 0 ? D.qe[m * nR + D.pri[m]] : '', ecoLista(c, t)].map(q).join(';') + '\r\n';
       n++;
     }
   }
@@ -1441,8 +1461,8 @@ async function exportTodas(){
   const r0 = mes >= 0 ? mes : 0, r1 = mes >= 0 ? mes : nR - 1, H = D.hasE, Q = D.qe, F = D.fe;
   bloqueia(true); prog(true, 'Gerando o analítico de todas as economias', mes >= 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'TIPO_FATURAMENTO_ATUAL',
-    'SITUACAO_NO_MES', 'ORIGEM', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS', 'LISTAS_VIRAR'];
+  const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'TIPO_FATURAMENTO_ATUAL',
+    'SITUACAO_NO_MES', 'ORIGEM', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS', 'LISTAS_VIRAR'];
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, linhas = 0; const L = nR - 1;
   for (let r = r0; r <= r1; r++){
@@ -1458,7 +1478,7 @@ async function exportTodas(){
       else if (r > 0 && H[b] && Q[j] > base0){ ecoN = Q[j] - base0; fn = F[j] * ecoN / Q[j]; sit = 'Já faturava e fatura mais economias'; }
       else sit = r === 0 ? 'Faturando na base' : H[b] ? 'Já faturava' : 'Voltou a faturar';
       chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-        D.dict.tipo[D.tipo[b + L]] || '', sit, D.nova[m] ? 'Nova na base' : 'Já existia na base', D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
+        D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', sit, D.nova[m] ? 'Nova na base' : 'Já existia na base', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
         Q[j], ecoN || '', D.et[j], nf2.format(F[j]), fn ? nf2.format(fn) : '', listasDe(m)].map(q).join(';') + '\r\n';
       linhas++;
     }
@@ -1477,8 +1497,8 @@ async function exportAnalitico(){
   const H = D.hasE, Q = D.qe;
   bloqueia(true); prog(true, 'Gerando o analítico', mes > 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'TIPO_FATURAMENTO_ATUAL',
-    'ORIGEM', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'];
+  const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'TIPO_FATURAMENTO_ATUAL',
+    'ORIGEM', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'];
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, soma = 0;
   // ordem: mês e, dentro do mês, matrícula
@@ -1496,7 +1516,7 @@ async function exportAnalitico(){
         if (!mov) continue;
         const ant = D.present[j - 1] ? Q[j - 1] : '', at = D.present[j] ? Q[j] : '';
         chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-          D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', D.pri[m] >= 0 ? labels[D.pri[m]] : '', mov, soma1 ? 'SIM' : 'NÃO', ant, at,
+          D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', mov, soma1 ? 'SIM' : 'NÃO', ant, at,
           soma1 ? conta : '', D.ligMes[m] === r ? 'SIM' : 'NÃO', D.present[j] ? D.et[j] : '', D.present[j] ? nf2.format(D.fe[j]) : '', listasDe(m)].map(q).join(';') + '\r\n';
         n++; if (soma1) soma += conta;
       }
@@ -1577,6 +1597,11 @@ document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b
 $('#btnAnalitico').onclick = () => { if (D && !rodando) ($('#anTipo').value === 'todas' ? exportTodas : exportAnalitico)(); };
 $('#anTipo').onchange = () => { if (D) fillAnMes(); };
 $('#btnListas').onclick = () => { if (D) exportListas(); };
+document.querySelectorAll('[data-lsv]').forEach(b => b.onclick = () => {
+  st.lsv = b.dataset.lsv;
+  document.querySelectorAll('[data-lsv]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+  if (D) renderListas();
+});
 $('#tblListas').addEventListener('click', e => {
   const b = e.target.closest('[data-lista]'); if (!b) return;
   $('#cMov').value = 'all'; fillMes(); $('#cLista').value = b.dataset.lista; showTab('cons');
