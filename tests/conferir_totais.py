@@ -1,5 +1,6 @@
 """Recalcula em Python, de forma independente, os números do Resumo do painel.
-Uso: python tests/conferir_totais.py base_teste.xlsx
+Uso: python tests/conferir_totais.py base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
+As listas "Virar" (opcionais) são comparadas pelo primeiro mês em que cada matrícula aparece faturando esgoto.
 Compare a saída com os indicadores e as tabelas do painel (mesmas regras do index.html)."""
 import sys, collections
 from openpyxl import load_workbook
@@ -70,3 +71,22 @@ print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já 
 print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{rot[r]} {lig_aum[r]:.0f}' for r in range(1, n)))
 print('Por mês, economias acrescentadas nelas:', ' '.join(f'{rot[r]} {aum[r]:.0f}' for r in range(1, n)))
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
+
+# comparativo com as listas "Virar para Água e Esgoto": mês previsto pelo nome do arquivo, ano pela Referência
+import os, unicodedata
+NOMES = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro']
+pri = {m: next((k for k in refs if T[m].get(k)), None) for m in T}
+for arq in sys.argv[2:]:
+    nome = unicodedata.normalize('NFD', os.path.basename(arq)).encode('ascii', 'ignore').decode().lower()
+    mes = next(i + 1 for i, n in enumerate(NOMES) if n in nome)
+    lws = load_workbook(arq, read_only=True).worksheets[0]
+    linhas = list(lws.iter_rows(values_only=True)); cab = {c: i for i, c in enumerate(linhas[0]) if c}
+    mats = list(dict.fromkeys(r[cab['NUM_LIGACAO']] for r in linhas[1:] if r[0] is not None))
+    ano = linhas[1][cab['Referência']].year; alvo = (ano, mes)
+    cat = collections.Counter()
+    for m in mats:
+        p = pri.get(m, 'fora') if m in T else 'fora'
+        cat['não está na base' if p == 'fora' else 'ainda não faturou' if p is None else 'já faturava em ' + rot[0] if p == refs[0]
+            else 'no mês previsto' if p == alvo else 'antes' if p < alvo else 'depois'] += 1
+    eco_b = sum(Q[m].get(alvo, 0) for m in mats if m in T)
+    print(f'Lista {os.path.basename(arq)} ({mes:02d}/{ano}): {len(mats)} matrículas', dict(cat), f'economias faturadas na base no mês previsto: {eco_b}')

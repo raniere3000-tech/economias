@@ -9,6 +9,10 @@ Painel em HTML que consolida as bases mensais de faturamento (exportadas em .xls
 3. Aguarde a leitura. A base fica guardada no navegador e abre sozinha nas próximas vezes.
 4. Para atualizar, carregue os arquivos novos: eles substituem a base anterior.
 
+## Listas de comparação
+
+Planilhas com "Virar" no nome (por exemplo, "Julho - Virar para Água e Esgoto.xlsx") são tratadas como listas das matrículas que deveriam passar a faturar esgoto no mês do nome. Coloque-as na mesma pasta da base. Elas não entram nos totais: o painel só compara, no cartão "Comparativo com as listas de virar para Água e Esgoto", em que mês cada matrícula começou a faturar esgoto.
+
 ## Privacidade
 
 Os arquivos são lidos só no seu computador. Nenhum dado é enviado para a internet nem para este repositório. Nunca suba arquivos .xlsx ou .csv da base para cá.

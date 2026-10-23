@@ -31,7 +31,8 @@ README.md                   instruções de uso
 .gitignore                  bloqueia *.xlsx, *.xls, *.csv e ~$* (dados nunca vão para o repositório)
 CLAUDE.md                   este arquivo
 tests/gerar_base_teste.py   gera base sintética no formato da exportação
-tests/conferir_totais.py    recalcula os números do Resumo em Python para conferência
+tests/conferir_totais.py    recalcula os números do Resumo em Python para conferência (e o comparativo com listas Virar)
+tests/gerar_lista_teste.py  gera uma lista "Virar para Água e Esgoto" a partir da base sintética
 ```
 
 Publicação: GitHub Pages, branch `main`, pasta raiz. Para atualizar, basta substituir o `index.html`.
@@ -46,6 +47,7 @@ Cada aba precisa ter, com o cabeçalho na linha em que aparece `NUM_LIGACAO` (a 
 - **Referência:** pode vir como data real do Excel (número de série) ou como texto `dd/mm/aaaa`. É normalizada para `AAAA-MM`.
 - **Valores repetidos:** se a mesma matrícula aparecer duas vezes na mesma referência, vale a última linha lida.
 - **Abas ignoradas:** abas sem `NUM_LIGACAO` são ignoradas e listadas no rodapé.
+- **Listas de comparação (v1.15):** arquivo com "virar" no nome (ex.: "Julho - Virar para Água e Esgoto.xlsx") é uma lista de matrículas que deveriam passar a faturar esgoto no mês do nome. O worker guarda só as matrículas (com nome, cidade, sub-categoria e economias da própria lista) em `d.listas`, agrupadas por mês, e **nunca soma essas linhas à base**. O mês vem do nome do arquivo (janeiro a dezembro, sem acento); o ano, do nome ou da Referência mais comum da planilha. Também respeitam `ULTIMO_CONTRATO = SIM` e não exigem a coluna Referência.
 - **Volume esperado:** cerca de 3 milhões de linhas no total. No teste, 600 mil linhas foram lidas em cerca de 7 segundos.
 
 ## Arquitetura (index.html)
@@ -78,6 +80,8 @@ O botão "📁 Conectar pasta" usa `showDirectoryPicker`, que só existe no Chro
 | `nova[m]` | 1 para matrícula nova: aparece na base pela primeira vez em 2026 já faturando esgoto (`entra[m]` igual à primeira referência em que a matrícula aparece). |
 | `ligMes[m]` | Mês em que a matrícula passa a contar como ligação que passou a faturar esgoto: o primeiro mês em que soma economias novas (troca ou aumento); `-1` se não somar. Usado no Resumo e nos filtros do Consolidado. |
 | `ecoNov[m]` | Economias novas da matrícula em 2026 (troca + aumentos). |
+| `pri[m]` | Primeiro mês em que a matrícula aparece faturando esgoto na base (dez/25 incluído); `-1` se nunca. Coluna `PRIMEIRO_MES_FATURANDO_ESGOTO` nos analíticos e no CSV do Consolidado. |
+| `cmp` | Comparativo com as listas (`montaListas()`): por lista, o mês previsto `rL` e a situação de cada matrícula pelo `pri[m]`: 0 começou no mês previsto, 1 antes, 2 depois, 3 já faturava em dez/25, 4 ainda não faturou, 5 não está na base; `sitMat` guarda a situação por matrícula da base. |
 | `anyOut[m]` | 1 se deixou de faturar esgoto em algum mês. |
 | `yStat[m]` | Situação no ano (coluna "Esgoto em 2026"): 0 sem esgoto faturado, 1 já faturava, 2 nova faturando em 2026, 3 deixou de faturar, 4 já faturava e passou a faturar mais economias em 2026. 2 e 4 são exatamente as ligações com `ligMes > 0`. |
 
@@ -151,13 +155,15 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - O alinhamento funciona porque o SVG tem `viewBox` de 1000 de largura e área de rótulos de 180, enquanto a tabela usa `table-layout: fixed` com a primeira coluna em 18%. As demais colunas têm larguras iguais nos dois.
    - **Analítico (v1.13):** no topo do cartão, o seletor de mês ("Todos os meses" ou um mês) e o botão "⬇ Baixar analítico" (`exportAnalitico()`) geram um CSV (`;`, BOM, vírgula decimal) com uma linha por matrícula e mês com movimento de esgoto, ordenado por mês e matrícula, respeitando os filtros de cidade e sub-categoria. Colunas: `REFERENCIA, NUM_LIGACAO, NOM_CLIENTE, CIDADE, SUB_CATEGORIA, SIT_LIG, SIT_CONTRATO, TIPO_FATURAMENTO_ATUAL, ORIGEM, MOVIMENTO, SOMA_NO_TOTAL, ECO_ESGOTO_MES_ANTERIOR, ECO_ESGOTO_MES, ECONOMIAS_CONTADAS, CONTA_COMO_MATRICULA, ECO_TOTAL_MES, FAT_ESGOTO_MES`. Movimentos: passou a faturar esgoto, passou a faturar mais economias (os dois somam), voltou a faturar, deixou de faturar e passou a faturar menos economias (não somam). Com `SOMA_NO_TOTAL = SIM`, a soma de `ECONOMIAS_CONTADAS` é igual às economias novas faturando do Resumo, e `CONTA_COMO_MATRICULA = SIM` dá as matrículas novas faturando. Na base sintética: todos os meses 2.430 economias e 1.516 matrículas; jul/26 298 e 189.
    - **Analítico de todas as economias (v1.14):** o seletor "Analítico" escolhe entre "Movimentos do mês" (o arquivo acima) e "Todas as economias faturando" (`exportTodas()`): uma linha por matrícula e mês com economias de esgoto faturadas ou valor de esgoto, de dez/25 em diante (ao escolher esse tipo, o mês começa no último, porque todos os meses podem passar do limite de 1.048.576 linhas do Excel). Colunas: `REFERENCIA`, cadastro, `TIPO_FATURAMENTO_ATUAL, SITUACAO_NO_MES` (Faturando na base, Já faturava, Nova faturando em 2026, Já faturava e fatura mais economias, Voltou a faturar, Valor de esgoto sem economias de esgoto), `ORIGEM, MES_PASSOU_A_FATURAR_ESGOTO, ECO_ESGOTO_MES, ECO_NOVAS_FATURANDO, ECO_TOTAL_MES, FAT_ESGOTO_MES, FAT_ESGOTO_NOVAS`. Por mês, a soma de `ECO_ESGOTO_MES` é a linha "Economias com esgoto faturadas", `FAT_ESGOTO_MES` o faturamento de esgoto total e `FAT_ESGOTO_NOVAS` o das economias novas faturando. Na base sintética, set/26: 2.164 economias, R$ 271.628 e R$ 247.441.
-4. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
-5. **Tabelas Por cidade e Por sub-categoria:**
+   - **Colunas novas (v1.15):** os dois analíticos ganharam `PRIMEIRO_MES_FATURANDO_ESGOTO` e `LISTAS_VIRAR` (ex.: "jul/26: Começou no mês previsto").
+4. **Cartão "Comparativo com as listas de virar para Água e Esgoto"** (v1.15, só aparece quando há listas): uma linha por lista com as matrículas na lista, que começaram no mês previsto, antes, depois, já faturavam em dez/25, ainda não faturaram e não estão na base, mais as economias de esgoto da própria lista e as faturadas na base no mês previsto. Os números são botões que abrem o Consolidado com o filtro "Lista virar". Respeita os filtros de cidade e sub-categoria (fora da base, pela cidade da lista). O botão "⬇ Baixar comparativo" (`exportListas()`) gera um CSV com uma linha por matrícula das listas, inclusive as que não estão na base. Na base sintética com as listas de `gerar_lista_teste.py`: jul/26 224 matrículas (113 no mês, 39 antes, 16 depois, 15 já faturavam, 26 ainda não, 15 fora da base; 243 economias faturadas em jul) e set/26 215 (106, 53, 0, 15, 26, 15; 232).
+5. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
+6. **Tabelas Por cidade e Por sub-categoria:**
    - meses, Total 2026 e as que deixaram de faturar (só para conhecimento);
    - na tabela por cidade, o seletor **"Cidades na tabela"** (`st.cidTab`, mesmo componente dos filtros) escolhe as linhas mostradas; o Total soma só as cidades escolhidas e os indicadores não mudam;
    - um seletor Economias / Faturamento (R$), que fica no cartão de cidade e vale para as duas;
    - ordenação ao clicar nos títulos.
-6. **Rodapé** com a origem da base, as linhas desconsideradas e a regra de medição.
+7. **Rodapé** com a origem da base, as linhas desconsideradas, as listas de comparação (fora dos totais) e a regra de medição.
 
 ### Consolidado
 
@@ -171,6 +177,7 @@ Uma linha por matrícula. As colunas cadastrais e "Esgoto em 2026" ficam fixas, 
   - deixou de pagar num mês específico (troca de tipo);
   - divergentes;
   - aumentou, reduziu ou sem mudança.
+- **Filtro "Lista virar"** (aparece quando há listas): todas da lista na base ou uma situação do comparativo.
 - **Ordenação:** por matrícula, maior aumento ou maior redução.
 - **Colunas visíveis:** escolhidas por chips.
 - **Paginação:** 100 por página.
@@ -194,6 +201,9 @@ Uma linha por matrícula. As colunas cadastrais e "Esgoto em 2026" ficam fixas, 
 ```bash
 python tests/gerar_base_teste.py 3000 base_teste.xlsx     # gera a base sintética (requer openpyxl)
 python tests/conferir_totais.py base_teste.xlsx           # números de referência
+python tests/gerar_lista_teste.py base_teste.xlsx 2026-07 "Julho - Virar para Agua e Esgoto.xlsx"
+python tests/conferir_totais.py base_teste.xlsx "Julho - Virar para Agua e Esgoto.xlsx"   # comparativo
+# no teste com Playwright, use nomes de arquivo sem acento: o setInputFiles daqui descarta arquivos com acento no nome
 # abra o index.html no Chrome/Edge, carregue base_teste.xlsx e compare com a saída acima
 ```
 

@@ -152,6 +152,10 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .tab-seg th.sortable{cursor:pointer}
 .tab-seg th.sortable:hover{background:var(--azul)}
 .tab-seg td{border-bottom:1px solid #edf1f5}
+.tab-seg th.grupo{background:var(--azul);text-align:center}
+.tab-seg .mudo{color:var(--azul-claro);font-size:11px;font-weight:400}
+.btn-num{border:0;background:none;padding:0;font:inherit;color:var(--azul);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.btn-num:disabled{color:var(--azul-claro);text-decoration:none;cursor:default;font-weight:400}
 .tab-seg td:first-child,.tab-seg th:first-child{text-align:left;position:sticky;left:0;z-index:1;background:#fff}
 .tab-seg th:first-child{z-index:3;background:var(--marinho)}
 .tab-seg td:first-child{color:#334155;font-weight:600;font-family:var(--fonte);font-size:12.5px}
@@ -230,7 +234,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.14</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.15</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -309,6 +313,17 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="bloco-rolagem"><div class="bloco" id="blocoEco"></div></div>
     </div>
 
+    <div class="card" id="cardListas" hidden>
+      <div class="card-topo">
+        <div>
+          <h2>Comparativo com as listas de virar para Água e Esgoto</h2>
+          <p class="nota-secao">Matrículas das planilhas “Virar para Água e Esgoto”, comparadas pelo primeiro mês em que aparecem faturando esgoto na base. As listas não entram nos totais do painel. Clique num número para ver as matrículas no Consolidado.</p>
+        </div>
+        <div class="card-acoes"><button class="btn-just" id="btnListas" type="button">⬇ Baixar comparativo</button></div>
+      </div>
+      <div class="tabela-wrap" id="tblListas"></div>
+    </div>
+
     <div class="card">
       <div class="card-topo">
         <div>
@@ -361,6 +376,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
           </select>
         </label>
         <label class="field" id="cMesWrap" hidden>Mês <select id="cMes"></select></label>
+        <label class="field" id="cListaWrap" hidden>Lista virar <select id="cLista"></select></label>
         <label class="field">Ordenar
           <select id="cSort">
             <option value="mat">Matrícula</option>
@@ -618,10 +634,56 @@ async function sheetList(file, byName){
   if (!out.length) for (const [k, e] of byName) if (/^xl\/worksheets\/sheet\d+\.xml$/.test(k)) out.push({ name: k.split('/').pop(), entry: e });
   return out;
 }
+// Listas de comparação ("Julho - Virar para Água e Esgoto"): arquivo com "virar" no nome. Guardam só quais matrículas
+// deveriam passar a faturar esgoto no mês do nome; nunca entram na base nem nos totais.
+const LISTA_RE = /virar/i;
+const MESES_NOME = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+class Lista {
+  constructor(arquivo){
+    this.arquivo = arquivo; this.itens = new Map(); this.refs = new Map(); this.linhas = 0;
+    const n = arquivo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    this.mes = MESES_NOME.findIndex(m => n.includes(m)) + 1;
+    const y = n.match(/20\d\d/); this.ano = y ? +y[0] : 0;
+  }
+  add(c, h){
+    const mv = c[h.mat]; if (mv == null || mv === '') return;
+    if (h.ult !== undefined && norm(c[h.ult]) !== 'SIM') return;
+    const mk = typeof mv === 'number' ? String(Math.round(mv)) : String(mv).trim();
+    const rk = h.ref !== undefined ? refKey(c[h.ref]) : null;
+    if (rk) this.refs.set(rk, (this.refs.get(rk) || 0) + 1);
+    this.itens.set(mk, { nome: str(c[h.nome]), cid: str(c[h.cid]), sub: str(c[h.sub]),
+      qe: Math.round(toNum(c[h.qe])), et: Math.round(toNum(c[h.et])) });
+    this.linhas++;
+  }
+  // mês previsto: o do nome do arquivo; o ano sai do nome ou da Referência mais comum da planilha
+  ref(){
+    const comum = [...this.refs.entries()].sort((a, b) => b[1] - a[1])[0];
+    const ano = this.ano || (comum ? +comum[0].slice(0, 4) : 0);
+    if (this.mes && ano) return ano + '-' + String(this.mes).padStart(2, '0');
+    return comum ? comum[0] : null;
+  }
+}
+function juntaListas(listas){
+  const porRef = new Map();
+  for (const L of listas){
+    const rk = L.ref() || L.arquivo;
+    let g = porRef.get(rk);
+    if (!g){ g = { ref: L.ref(), arquivos: [], mats: [], nomes: [], cid: [], sub: [], qe: [], et: [] }; porRef.set(rk, g); }
+    g.arquivos.push(L.arquivo);
+    const vistos = new Set(g.mats);
+    for (const [mk, v] of L.itens){
+      if (vistos.has(mk)) continue; vistos.add(mk);
+      g.mats.push(mk); g.nomes.push(v.nome); g.cid.push(v.cid); g.sub.push(v.sub); g.qe.push(v.qe); g.et.push(v.et);
+    }
+  }
+  return [...porRef.values()].sort((a, b) => String(a.ref).localeCompare(String(b.ref)));
+}
 async function processFiles(files){
-  const S = new Store();
+  const S = new Store(), listas = [];
   for (let fi = 0; fi < files.length; fi++){
     const file = files[fi];
+    const lista = LISTA_RE.test(file.name) ? new Lista(file.name) : null;
+    if (lista) listas.push(lista);
     const label = files.length > 1 ? `Arquivo ${fi + 1} de ${files.length}: ${file.name}` : file.name;
     progress(label, 'Abrindo o arquivo…', 0, true);
     const entries = await readZip(file);
@@ -645,19 +707,22 @@ async function processFiles(files){
           if (c.some(v => norm(v) === 'NUM_LIGACAO')){
             header = {};
             c.forEach((v, i) => { const k = ALIAS[norm(v)]; if (k && header[k] === undefined) header[k] = i; });
-            if (header.ref === undefined) throw new Error(`A aba “${sh.name}” não tem a coluna Referência.`);
+            if (header.ref === undefined && !lista) throw new Error(`A aba “${sh.name}” não tem a coluna Referência.`);
           } else if (seen > 30) return false;
           return;
         }
-        S.add(c, header);
-      }, p => progress(label, msg(), p));
+        if (lista) lista.add(c, header); else S.add(c, header);
+      }, p => progress(label, lista ? `Lista de comparação “${file.name}”` : msg(), p));
+      if (lista) continue;
       if (header) S.stats.abas.push({ arquivo: file.name, aba: sh.name, linhas: S.stats.linhas - before });
       else S.stats.ignoradas.push(file.name + ' / ' + sh.name);
     }
   }
   if (!S.stats.linhas) throw new Error('Nenhuma linha válida encontrada. Confira se as abas têm a coluna NUM_LIGACAO no cabeçalho.');
   progress('Montando o consolidado', 'Organizando matrículas e referências…', 1, true);
-  return S.build();
+  const d = S.build();
+  d.listas = juntaListas(listas);
+  return d;
 }
 self.onmessage = async ev => {
   try {
@@ -675,7 +740,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.14';
+const VERSAO_SITE = '1.15';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -791,6 +856,7 @@ function setData(d){
   montaFiltro('fSub', 'Sub-categoria', D.dict.sub, 'subSel');
   montaFiltro('fCidTab', 'Cidades na tabela', D.dict.cid, 'cidTab');
   fillAnMes();
+  montaListas();
   const first = refLabel(D.refs[0]), last = refLabel(D.refs[D.refs.length - 1]);
   const dt = new Date(D.meta.carregadoEm);
   $('#status').textContent = `${first} a ${last} · carregado em ${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -835,7 +901,7 @@ function derive(){
   const nM = D.mats.length, nR = D.refs.length, N = nM * nR;
   D.hasE = new Uint8Array(N); D.div = new Uint8Array(N); D.divN = new Uint16Array(nM);
   D.yStat = new Uint8Array(nM); D.anyOut = new Uint8Array(nM); D.entra = new Int16Array(nM).fill(-1); D.nova = new Uint8Array(nM);
-  D.ligMes = new Int16Array(nM).fill(-1); D.ecoNov = new Int32Array(nM);
+  D.ligMes = new Int16Array(nM).fill(-1); D.ecoNov = new Int32Array(nM); D.pri = new Int16Array(nM).fill(-1);
   for (let m = 0; m < nM; m++){
     const b = m * nR;
     for (let r = 0; r < nR; r++){
@@ -847,6 +913,7 @@ function derive(){
       else if (h && !(D.fe[j] > 0)) D.div[j] = 2;          // economias de esgoto sem valor de esgoto faturado
       if (D.div[j]) D.divN[m]++;
     }
+    for (let r = 0; r < nR; r++) if (D.hasE[b + r]){ D.pri[m] = r; break; }   // primeiro mês faturando esgoto na base
     let entered = D.hasE[b] === 1;
     for (let r = 1; r < nR; r++){
       const h = D.hasE[b + r], p = D.hasE[b + r - 1];
@@ -1096,6 +1163,7 @@ function renderResumo(){
     { nome: 'Economias com esgoto faturadas', valor: nf0.format(o.ecoTot[r]), cls: 'mudo' }
   ] };
 
+  renderListas();
   const money = st.metric === 'fat';
   segTable($('#tblCid'), o.cidUsed, D.dict.cid, money ? o.cidF : o.cidE, o.cidS, money, 'Cidade', 'sortCid', st.cidTab);
   segTable($('#tblSub'), o.subUsed, D.dict.sub, money ? o.subF : o.subE, o.subS, money, 'Sub-categoria', 'sortSub');
@@ -1108,6 +1176,7 @@ function renderResumo(){
     `quando a matrícula passa a ter economias de esgoto faturadas (o TIPO_FATURAMENTO é o atual e não entra na conta) ou fatura mais economias de esgoto. Matrículas novas faturando: as matrículas dessas economias, ` +
     `uma vez cada, no primeiro mês. Separação por origem: já existiam na base, ou novas faturando de matrículas que aparecem pela primeira vez em 2026 já faturando esgoto. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
+    (D.cmp && D.cmp.length ? ` Listas de comparação, fora dos totais: ${D.cmp.map(c => `${c.L.arquivos.join(', ')} (${c.label}, ${nf0.format(c.L.mats.length)} matrículas)`).join('; ')}.` : '') +
     (s.ignoradas.length ? ` Abas sem a coluna NUM_LIGACAO, ignoradas: ${s.ignoradas.join(', ')}.` : '');
 }
 function segTable(el, used, names, T, S, money, title, sortKey, sel){
@@ -1158,6 +1227,7 @@ function consList(){
   const mes = $('#cMesWrap').hidden ? -1 : +$('#cMes').value;
   const digits = /^\d+$/.test(q);
   const out = [], delta = new Float64Array(D.mats.length);
+  const lv = $('#cLista').value, lista = lv ? { c: D.cmp[+lv.split(':')[0]], sit: lv.split(':')[1] === 'a' ? 'a' : +lv.split(':')[1] } : null;
   const any = (m, dir) => { if (mes > 0) return changed(m, dir, mes); for (let r = 1; r < nR; r++) if (changed(m, dir, r)) return true; return false; };
   for (const m of D.ordMat){
     if (!k[m]) continue;
@@ -1175,6 +1245,7 @@ function consList(){
       case 'reduziu': ok = qL < q0; break;
       case 'igual': ok = qL === q0; break;
     }
+    if (ok && lista) ok = lista.sit === 'a' ? lista.c.sitMat[m] >= 0 : lista.c.sitMat[m] === lista.sit;
     if (ok) out.push(m);
   }
   if (sort === 'mais') out.sort((a, b) => delta[b] - delta[a]);
@@ -1245,7 +1316,7 @@ async function exportCsv(){
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'ESGOTO_2026'];
   labels.forEach(l => FIELDS.forEach(f => head.push(`${f.h} ${l}`)));
-  head.push('MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA');
+  head.push('PRIMEIRO_MES_FATURANDO_ESGOTO', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA', 'LISTAS_VIRAR');
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   for (let i = 0; i < list.length; i += 5000){
     let chunk = '';
@@ -1257,7 +1328,7 @@ async function exportCsv(){
         FIELDS.forEach(f => row.push(q(cellVal(f.k, m * nR + r, true))));
         if (D.div[m * nR + r]) dv.push(labels[r]);
       }
-      row.push(q(D.ligMes[m] > 0 ? labels[D.ligMes[m]] : ''), q(D.ecoNov[m] || ''), q(changeMonths(m, 1).join(', ')), q(changeMonths(m, 0).join(', ')), q(dv.join(', ')));
+      row.push(q(D.pri[m] >= 0 ? labels[D.pri[m]] : ''), q(D.ligMes[m] > 0 ? labels[D.ligMes[m]] : ''), q(D.ecoNov[m] || ''), q(changeMonths(m, 1).join(', ')), q(changeMonths(m, 0).join(', ')), q(dv.join(', ')), q(listasDe(m)));
       chunk += row.join(';') + '\r\n';
     }
     parts.push(chunk);
@@ -1274,6 +1345,65 @@ function fillAnMes(){
   // todas as economias em todos os meses pode passar do limite de linhas do Excel: começa no último mês
   if (todas && (prev === '-1' || !prev)) sel.value = String(D.refs.length - 1);
   else if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+/* ---------- comparativo com as listas de virar para Água e Esgoto ---------- */
+const sitNome = s => [`Começou no mês previsto`, `Começou antes do previsto`, `Começou depois do previsto`,
+  `Já faturava em ${refLabel(D.refs[0])}`, 'Ainda não faturou esgoto', 'Não está na base'][s];
+function montaListas(){
+  const nM = D.mats.length, idx = new Map(D.mats.map((s, i) => [s, i]));
+  D.cmp = (D.listas || []).map(L => {
+    const rL = L.ref ? D.refs.indexOf(L.ref) : -1, sitMat = new Int8Array(nM).fill(-1);
+    const itens = L.mats.map((mk, i) => {
+      const m = idx.has(mk) ? idx.get(mk) : -1; let sit = 5;
+      if (m >= 0){ const p = D.pri[m]; sit = p < 0 ? 4 : p === 0 ? 3 : rL < 0 || p < rL ? 1 : p === rL ? 0 : 2; sitMat[m] = sit; }
+      return { i, m, sit };
+    });
+    return { L, rL, label: L.ref ? refLabel(L.ref) : L.arquivos[0], itens, sitMat };
+  });
+  const sel = $('#cLista');
+  sel.innerHTML = '<option value="">Todas as matrículas</option>' + D.cmp.map((c, i) =>
+    `<option value="${i}:a">${c.label} · todas da lista na base</option>` + [0, 1, 2, 3, 4].map(s => `<option value="${i}:${s}">${c.label} · ${sitNome(s).toLowerCase()}</option>`).join('')).join('');
+  $('#cListaWrap').hidden = !D.cmp.length;
+}
+// itens da lista que passam nos filtros de cidade e sub-categoria (fora da base, pela cidade da própria lista)
+function itensFiltrados(c, k){
+  const C = st.cidSel, S = st.subSel, ci = new Map(D.dict.cid.map((v, i) => [v, i])), si = new Map(D.dict.sub.map((v, i) => [v, i]));
+  return c.itens.filter(t => t.m >= 0 ? k[t.m] : (!C || C.has(ci.get(c.L.cid[t.i]))) && (!S || S.has(si.get(c.L.sub[t.i]))));
+}
+function listasDe(m){ return D.cmp.filter(c => c.sitMat[m] >= 0).map(c => `${c.label}: ${sitNome(c.sitMat[m])}`).join('; '); }
+function renderListas(){
+  const card = $('#cardListas'); card.hidden = !D.cmp || !D.cmp.length; if (card.hidden) return;
+  const k = keepMask(), nR = D.refs.length;
+  const btn = (n, v) => n ? `<button type="button" class="btn-num" data-lista="${v}">${nf0.format(n)}</button>` : '<span class="zero">0</span>';
+  let h = `<table class="tab-seg"><thead><tr><th rowspan="2">Lista</th><th class="grupo" colspan="7">Matrículas</th><th class="grupo" colspan="2">Economias de esgoto</th></tr>
+    <tr><th>Na lista</th><th>Começaram no mês previsto</th><th>Começaram antes</th><th>Começaram depois</th><th>Já faturavam em ${refLabel(D.refs[0])}</th><th>Ainda não faturaram</th><th>Não estão na base</th>
+    <th>Na lista</th><th>Faturadas na base no mês previsto</th></tr></thead><tbody>`;
+  D.cmp.forEach((c, i) => {
+    const it = itensFiltrados(c, k), cnt = [0, 0, 0, 0, 0, 0]; let ecoL = 0, ecoB = 0;
+    it.forEach(t => { cnt[t.sit]++; ecoL += c.L.qe[t.i] || 0; if (t.m >= 0 && c.rL >= 0) ecoB += D.qe[t.m * nR + c.rL]; });
+    h += `<tr><td title="${esc(c.L.arquivos.join(', '))}"><b>${esc(c.label)}</b> <span class="mudo">${esc(c.L.arquivos.join(', '))}</span></td><td class="tot">${nf0.format(it.length)}</td>` +
+      [0, 1, 2, 3, 4].map(s => `<td>${btn(cnt[s], i + ':' + s)}</td>`).join('') + `<td class="info">${nf0.format(cnt[5])}</td>` +
+      `<td>${nf0.format(ecoL)}</td><td>${c.rL >= 0 ? nf0.format(ecoB) : '–'}</td></tr>`;
+  });
+  $('#tblListas').innerHTML = h + '</tbody></table>';
+}
+async function exportListas(){
+  const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel);
+  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = ['LISTA_MES_PREVISTO', 'ARQUIVO', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SITUACAO', 'PRIMEIRO_MES_FATURANDO_ESGOTO',
+    'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_LISTA', 'ECO_ESGOTO_BASE_MES_PREVISTO', 'ECO_ESGOTO_BASE_PRIMEIRO_MES'];
+  let txt = '\ufeff' + head.join(';') + '\r\n', n = 0;
+  for (const c of D.cmp){
+    for (const t of itensFiltrados(c, k)){
+      const m = t.m, L = c.L, dentro = m >= 0;
+      txt += [c.label, L.arquivos.join(', '), L.mats[t.i], dentro ? D.nomes[m] : L.nomes[t.i], dentro ? D.dict.cid[D.cid[m]] : L.cid[t.i], dentro ? D.dict.sub[D.sub[m]] : L.sub[t.i],
+        sitNome(t.sit), dentro && D.pri[m] >= 0 ? labels[D.pri[m]] : '', dentro && D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', L.qe[t.i] || 0,
+        dentro && c.rL >= 0 ? D.qe[m * nR + c.rL] : '', dentro && D.pri[m] >= 0 ? D.qe[m * nR + D.pri[m]] : ''].map(q).join(';') + '\r\n';
+      n++;
+    }
+  }
+  if (!n){ toast('Nenhuma matrícula das listas com esses filtros.'); return; }
+  baixa([txt], 'comparativo_listas_virar.csv');
 }
 function baixa(parts, nome){
   const url = URL.createObjectURL(new Blob(parts, { type: 'text/csv;charset=utf-8' }));
@@ -1292,7 +1422,7 @@ async function exportTodas(){
   bloqueia(true); prog(true, 'Gerando o analítico de todas as economias', mes >= 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'TIPO_FATURAMENTO_ATUAL',
-    'SITUACAO_NO_MES', 'ORIGEM', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS'];
+    'SITUACAO_NO_MES', 'ORIGEM', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS', 'LISTAS_VIRAR'];
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, linhas = 0; const L = nR - 1;
   for (let r = r0; r <= r1; r++){
@@ -1308,8 +1438,8 @@ async function exportTodas(){
       else if (r > 0 && H[b] && Q[j] > base0){ ecoN = Q[j] - base0; fn = F[j] * ecoN / Q[j]; sit = 'Já faturava e fatura mais economias'; }
       else sit = r === 0 ? 'Faturando na base' : H[b] ? 'Já faturava' : 'Voltou a faturar';
       chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-        D.dict.tipo[D.tipo[b + L]] || '', sit, D.nova[m] ? 'Nova na base' : 'Já existia na base', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
-        Q[j], ecoN || '', D.et[j], nf2.format(F[j]), fn ? nf2.format(fn) : ''].map(q).join(';') + '\r\n';
+        D.dict.tipo[D.tipo[b + L]] || '', sit, D.nova[m] ? 'Nova na base' : 'Já existia na base', D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
+        Q[j], ecoN || '', D.et[j], nf2.format(F[j]), fn ? nf2.format(fn) : '', listasDe(m)].map(q).join(';') + '\r\n';
       linhas++;
     }
     parts.push(chunk); n++;
@@ -1328,7 +1458,7 @@ async function exportAnalitico(){
   bloqueia(true); prog(true, 'Gerando o analítico', mes > 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'TIPO_FATURAMENTO_ATUAL',
-    'ORIGEM', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES'];
+    'ORIGEM', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'];
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, soma = 0;
   // ordem: mês e, dentro do mês, matrícula
@@ -1346,8 +1476,8 @@ async function exportAnalitico(){
         if (!mov) continue;
         const ant = D.present[j - 1] ? Q[j - 1] : '', at = D.present[j] ? Q[j] : '';
         chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-          D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', mov, soma1 ? 'SIM' : 'NÃO', ant, at,
-          soma1 ? conta : '', D.ligMes[m] === r ? 'SIM' : 'NÃO', D.present[j] ? D.et[j] : '', D.present[j] ? nf2.format(D.fe[j]) : ''].map(q).join(';') + '\r\n';
+          D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', D.pri[m] >= 0 ? labels[D.pri[m]] : '', mov, soma1 ? 'SIM' : 'NÃO', ant, at,
+          soma1 ? conta : '', D.ligMes[m] === r ? 'SIM' : 'NÃO', D.present[j] ? D.et[j] : '', D.present[j] ? nf2.format(D.fe[j]) : '', listasDe(m)].map(q).join(';') + '\r\n';
         n++; if (soma1) soma += conta;
       }
     }
@@ -1426,6 +1556,12 @@ $('#btnClear').onclick = async () => {
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 $('#btnAnalitico').onclick = () => { if (D && !rodando) ($('#anTipo').value === 'todas' ? exportTodas : exportAnalitico)(); };
 $('#anTipo').onchange = () => { if (D) fillAnMes(); };
+$('#btnListas').onclick = () => { if (D) exportListas(); };
+$('#tblListas').addEventListener('click', e => {
+  const b = e.target.closest('[data-lista]'); if (!b) return;
+  $('#cMov').value = 'all'; fillMes(); $('#cLista').value = b.dataset.lista; showTab('cons');
+});
+$('#cLista').onchange = () => renderCons(true);
 ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
 document.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => {
   st.lt = b.dataset.lt;
