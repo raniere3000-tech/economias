@@ -76,8 +76,10 @@ O botão "📁 Conectar pasta" usa `showDirectoryPicker`, que só existe no Chro
 | `div[j]` | Divergência: `1` = tem esgoto e `Qtd_eco_fat_esgoto ≠ Eco_total`; `2` = sem tipo esgoto mas `Qtd_eco_fat_esgoto > 0`. |
 | `entra[m]` | Referência da **primeira** troca de sem esgoto para com esgoto em 2026, só para quem não tinha esgoto em dez/25; `-1` se não houver. |
 | `nova[m]` | 1 para matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO (`entra[m]` igual à primeira referência em que a matrícula aparece). |
+| `ligMes[m]` | Mês em que a matrícula passa a contar como ligação que passou a faturar esgoto: o primeiro mês em que soma economias novas (troca ou aumento); `-1` se não somar. Usado no Resumo e nos filtros do Consolidado. |
+| `ecoNov[m]` | Economias novas da matrícula em 2026 (troca + aumentos). |
 | `anyOut[m]` | 1 se deixou de faturar esgoto em algum mês. |
-| `yStat[m]` | Situação no ano: 0 sem esgoto, 1 já pagava, 2 passou a faturar em 2026, 3 deixou de faturar. |
+| `yStat[m]` | Situação no ano (coluna "Esgoto em 2026"): 0 sem esgoto, 1 já pagava, 2 passou a faturar em 2026, 3 deixou de faturar, 4 já pagava e aumentou economias em 2026, 5 AGUA E ESGOTO sem economias de esgoto faturadas. 2 e 4 são exatamente as ligações com `ligMes > 0`. |
 
 ## Regras de negócio (definidas com o usuário)
 
@@ -95,7 +97,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
   - Ligação que entrou por troca: conta o `Faturamento_bruto_direta_esgoto` inteiro, de `entra[m]` em diante.
   - Ligação que já pagava em dez/25 e aumentou economias: conta só a parte proporcional, `fe * (qe_atual − qe_dez) / qe_atual`, quando `qe_atual > qe_dez`.
 - **Faturamento existente:** faturamento de esgoto total do mês menos o faturamento das economias novas.
-- **Divergências:** aparecem num aviso no Resumo, contadas por ligação no último mês, com um botão que abre o Consolidado já filtrado.
+- **Divergências:** aparecem numa linha discreta no Consolidado (desde a v1.7; no Resumo o usuário achou grande demais), contadas por ligação no último mês, com o link "Ver só as divergentes" que aplica o filtro.
 
 ## Layout atual
 
@@ -124,25 +126,24 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - faturamento das novas somado no ano;
    - faturamento de esgoto total no último mês, com a variação sobre dez/25;
    - saídas, com borda laranja.
-2. **Aviso de divergências**, quando houver.
-3. **Cartão "Linha do tempo de 2026"**, recriado a partir do print do painel antigo, na paleta clara:
+2. **Cartão "Linha do tempo de 2026"**, recriado a partir do print do painel antigo, na paleta clara:
    - dez/25: economias e ligações com esgoto na base e faturamento de esgoto do mês;
    - cada mês: economias novas e ligações que passaram a faturar esgoto, as duas separadas entre já na base e matrículas novas, faturamento das novas (azul), faturamento de esgoto do mês e as que deixaram de faturar (laranja);
    - última coluna "Total 2026", com fundo tint: os mesmos itens somados no ano;
    - os blocos ficam alinhados entre as colunas com `grid-template-rows: subgrid` (6 linhas por coluna);
    - não mostra troca e aumento.
-4. **Cartão "Economias que passaram a faturar esgoto, por mês":**
+3. **Cartão "Economias que passaram a faturar esgoto, por mês":**
    - colunas empilhadas pela origem: ligações que já estavam na base em marinho e matrículas novas já com AGUA E ESGOTO em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
    - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações que passaram a faturar esgoto, ligações acumuladas, saídas e reentradas.
    - **Interativo:** ao passar o mouse (ou tocar) numa coluna, ela fica destacada e uma dica mostra os dados do mês: as duas origens, economias novas, acumulado, ligações que passaram a faturar esgoto (já na base, matrículas novas, acumuladas), economias acrescentadas em ligações que já tinham esgoto e quantas ligações foram, saídas e reentradas. O mesmo vale para o gráfico de faturamento (existente, novas, total, participação e economias com esgoto). A dica é montada por `ligaDica(el)` a partir de `el.dica = { n, titulo, linhas }`, definido em `renderResumo()`.
    - O alinhamento funciona porque o SVG tem `viewBox` de 1000 de largura e área de rótulos de 180, enquanto a tabela usa `table-layout: fixed` com a primeira coluna em 18%. As demais colunas têm larguras iguais nos dois.
-5. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
-6. **Tabelas Por cidade e Por sub-categoria:**
+4. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
+5. **Tabelas Por cidade e Por sub-categoria:**
    - meses, Total 2026 e saídas (só para conhecimento);
    - um seletor Economias / Faturamento (R$), que fica no cartão de cidade e vale para as duas;
    - ordenação ao clicar nos títulos.
-7. **Rodapé** com a origem da base, as linhas desconsideradas e a regra de medição.
+6. **Rodapé** com a origem da base, as linhas desconsideradas e a regra de medição.
 
 ### Consolidado
 
@@ -150,16 +151,18 @@ Uma linha por matrícula. As colunas cadastrais e "Esgoto em 2026" ficam fixas, 
 
 - **Busca:** por matrícula ou nome.
 - **Filtro de movimento:**
-  - passou a faturar em 2026;
+  - passou a faturar esgoto em 2026: as mesmas ligações do Resumo (`ligMes > 0`);
+  - passou a faturar esgoto num mês: `ligMes` igual ao mês escolhido, igual à linha do tempo;
   - deixou de faturar em algum mês;
-  - passou ou deixou de pagar num mês específico;
+  - deixou de pagar num mês específico (troca de tipo);
   - divergentes;
   - aumentou, reduziu ou sem mudança.
 - **Ordenação:** por matrícula, maior aumento ou maior redução.
 - **Colunas visíveis:** escolhidas por chips.
 - **Paginação:** 100 por página.
 - **Destaques:** a troca de tipo fica destacada no mês (tint para entrada, laranja-claro para saída), e as economias divergentes ficam em amarelo, com o motivo no `title`.
-- **Exportação CSV:** separador `;`, BOM, vírgula decimal, mais as colunas `MESES_PASSOU_A_PAGAR`, `MESES_DEIXOU_DE_PAGAR` e `MESES_COM_DIVERGENCIA`.
+- **Aviso de divergências** acima da contagem, quando houver.
+- **Exportação CSV:** separador `;`, BOM, vírgula decimal, mais as colunas `MES_PASSOU_A_FATURAR_ESGOTO` (`ligMes`), `ECONOMIAS_NOVAS_2026` (`ecoNov`), `MESES_TROCA_PARA_ESGOTO`, `MESES_DEIXOU_DE_PAGAR` e `MESES_COM_DIVERGENCIA`. Com o filtro "Passou a faturar esgoto em 2026", a soma de `ECONOMIAS_NOVAS_2026` é igual às economias novas do Resumo.
 
 ## Preferências do usuário
 

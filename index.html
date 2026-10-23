@@ -167,6 +167,8 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .keyline i{display:inline-block;width:11px;height:11px;border:1px solid var(--linha);margin:0 5px 0 14px;vertical-align:-1px}
 .keyline i:first-child{margin-left:0}
 .count{color:var(--azul-claro);font-size:12.5px;margin:0 0 6px}
+.aviso-cons{font-size:12px;color:var(--laranja-texto);margin:0 0 6px}
+.btn-link{border:0;background:none;padding:0;color:var(--azul);font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline}
 .cons-wrap{overflow:auto;max-height:620px;border:1px solid var(--linha);border-radius:8px}
 .cons th,.cons td{font-size:12px;padding:4px 8px;border-bottom:1px solid #edf1f5;text-align:right}
 .cons th{background:var(--marinho);color:#fff;font-weight:600;position:sticky;top:0;z-index:2}
@@ -223,7 +225,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.6</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.7</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -267,8 +269,6 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 
   <section id="view-resumo" hidden>
     <div class="kpis-grid" id="kpis"></div>
-
-    <div class="card avisos-card" id="divNote" hidden><span id="divTxt"></span><button class="btn-just" id="btnDiv" type="button">Ver no consolidado</button></div>
 
     <div class="card">
       <h2>Linha do tempo de 2026</h2>
@@ -325,9 +325,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
         <label class="field">Movimento do esgoto
           <select id="cMov">
             <option value="all">Todas as matrículas</option>
-            <option value="entrou_ano">Passou a faturar esgoto em 2026</option>
+            <option value="entrou_ano">Passou a faturar esgoto em 2026 (ligações do Resumo)</option>
             <option value="saiu_ano">Deixou de faturar esgoto em algum mês</option>
-            <option value="entrou_mes">Passou a pagar em um mês</option>
+            <option value="entrou_mes">Passou a faturar esgoto em um mês</option>
             <option value="saiu_mes">Deixou de pagar em um mês</option>
             <option value="diverg">Economias de esgoto divergentes</option>
             <option value="aumentou">Aumentou economias de esgoto</option>
@@ -350,6 +350,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
         <div class="chips" id="chips"></div>
       </div>
       <p class="keyline"><i style="background:var(--tint)"></i>passou a pagar esgoto no mês<i style="background:var(--laranja-tint)"></i>deixou de pagar esgoto no mês<i style="background:var(--aviso)"></i>economias de esgoto divergentes (passe o mouse para ver o motivo)</p>
+      <p class="aviso-cons" id="divNote" hidden><span id="divTxt"></span> <button class="btn-link" id="btnDiv" type="button">Ver só as divergentes</button></p>
       <p class="count" id="cCount"></p>
       <div class="cons-wrap cons" id="tblCons"></div>
       <div class="pager">
@@ -649,7 +650,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.6';
+const VERSAO_SITE = '1.7';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -808,6 +809,7 @@ function derive(){
   const esg = D.dict.tipo.map(t => /ESGOTO/.test(String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()));
   D.hasE = new Uint8Array(N); D.div = new Uint8Array(N); D.divN = new Uint16Array(nM);
   D.yStat = new Uint8Array(nM); D.anyOut = new Uint8Array(nM); D.entra = new Int16Array(nM).fill(-1); D.nova = new Uint8Array(nM);
+  D.ligMes = new Int16Array(nM).fill(-1); D.ecoNov = new Int32Array(nM);
   for (let m = 0; m < nM; m++){
     const b = m * nR;
     for (let r = 0; r < nR; r++){
@@ -826,7 +828,16 @@ function derive(){
     // matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO
     let pr = 0; while (pr < nR && !D.present[b + pr]) pr++;
     if (D.entra[m] > 0 && D.entra[m] === pr) D.nova[m] = 1;
-    D.yStat[m] = D.entra[m] > 0 ? 2 : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
+    // economias novas da matrícula em 2026 (mesmas regras de fluxos) e o mês em que ela passa a contar como ligação:
+    // o primeiro mês em que soma economias novas, por troca ou por aumento
+    for (let r = 1; r < nR; r++){
+      const j = b + r, h = D.hasE[j], p = D.hasE[j - 1];
+      let e = 0;
+      if (h && !p){ if (D.entra[m] === r) e = D.qe[j]; }
+      else if (h && p){ const d = D.qe[j] - D.qe[j - 1]; if (d > 0) e = d; }
+      if (e > 0){ D.ecoNov[m] += e; if (D.ligMes[m] < 0) D.ligMes[m] = r; }
+    }
+    D.yStat[m] = D.ligMes[m] > 0 ? (D.hasE[b] ? 4 : 2) : D.anyOut[m] ? 3 : D.entra[m] > 0 ? 5 : D.hasE[b] ? 1 : 0;
   }
 }
 // Entradas de economias (primeira troca para AGUA E ESGOTO + aumento em quem já pagava), separadas pela origem
@@ -841,7 +852,6 @@ function fluxos(k){
   for (let m = 0, n = D.mats.length; m < n; m++){
     if (!k[m]) continue;
     const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0, eOrig = D.nova[m] ? o.eNova : o.eBase;
-    let ligou = false;   // a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
@@ -859,7 +869,7 @@ function fluxos(k){
       if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; } else o.ree[r] += Q[j]; }
       else if (!h && p){ out = Q[j - 1]; o.sai[r] += out; }
       else if (h && p){ const d = Q[j] - Q[j - 1]; if (d > 0){ e = d; o.aum[r] += d; o.ligAum[r]++; } else if (d < 0){ out = -d; o.red[r] += out; } }
-      if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; if (!ligou){ ligou = true; o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } }
+      if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; if (r === D.ligMes[m]){ o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } }
       if (out){ o.cidS[c] += out; o.subS[s] += out; }
     }
   }
@@ -968,9 +978,6 @@ function renderResumo(){
     { t: 'Saídas (só para conhecimento)', v: nf0.format(sai), d: 'economias, não descontadas', c: 'negativo' }
   ].map(x => `<div class="kpi-card ${x.c || ''}"><h3 title="${esc(x.t)}">${x.t}</h3><p class="kpi-valor">${x.v}</p><p class="kpi-delta">${x.d}</p></div>`).join('');
 
-  const dL = o.divMat[L];
-  $('#divNote').hidden = !dL;
-  if (dL) $('#divTxt').textContent = `⚠ Em ${last}, ${nf0.format(dL)} ligações têm economias de esgoto diferentes do total de economias, ou economias de esgoto sem faturamento de esgoto. Vale conferir antes de fechar os números.`;
 
   // economias por mês
   const L1 = labels.slice(1), sl = a => L1.map((_, i) => a[i + 1]);
@@ -1083,8 +1090,8 @@ function segTable(el, used, names, T, S, money, title, sortKey){
 }
 
 /* ---------- Consolidado ---------- */
-const YSTAT = ['Sem esgoto', 'Já pagava', 'Passou a faturar em 2026', 'Deixou de faturar em 2026'];
-const YCLS = ['', '', 'pos', 'neg'];
+const YSTAT = ['Sem esgoto', 'Já pagava', 'Passou a faturar em 2026', 'Deixou de faturar em 2026', 'Já pagava e aumentou economias em 2026', 'AGUA E ESGOTO sem economias de esgoto faturadas'];
+const YCLS = ['', '', 'pos', 'neg', 'pos', ''];
 function buildChips(){
   $('#chips').innerHTML = FIELDS.map(f => `<button type="button" class="chip" data-f="${f.k}" aria-pressed="${visible.has(f.k)}">${f.l}</button>`).join('');
 }
@@ -1118,9 +1125,9 @@ function consList(){
     delta[m] = qL - q0;
     let ok = true;
     switch (mov){
-      case 'entrou_ano': ok = D.yStat[m] === 2; break;
+      case 'entrou_ano': ok = D.ligMes[m] > 0; break;
       case 'saiu_ano': ok = D.anyOut[m] === 1; break;
-      case 'entrou_mes': ok = any(m, 1); break;
+      case 'entrou_mes': ok = mes > 0 ? D.ligMes[m] === mes : D.ligMes[m] > 0; break;
       case 'saiu_mes': ok = any(m, 0); break;
       case 'diverg': ok = mes < 0 ? D.divN[m] > 0 : D.div[m * nR + mes] > 0; break;
       case 'aumentou': ok = qL > q0; break;
@@ -1153,6 +1160,11 @@ function renderCons(recalc){
   const pages = Math.max(1, Math.ceil(list.length / PAGE));
   st.page = Math.min(st.page, pages - 1);
   $('#cCount').textContent = `${nf0.format(list.length)} matrículas`;
+  // divergências no último mês, com os filtros de cidade e sub-categoria
+  const k = keepMask(), L = nR - 1; let dL = 0;
+  for (let m = 0, n = D.mats.length; m < n; m++) if (k[m] && D.div[m * nR + L]) dL++;
+  $('#divNote').hidden = !dL;
+  if (dL) $('#divTxt').textContent = `⚠ Em ${labels[L]}, ${nf0.format(dL)} ligações têm economias de esgoto diferentes do total de economias, ou economias de esgoto sem faturamento de esgoto.`;
   $('#pInfo').textContent = `Página ${st.page + 1} de ${nf0.format(pages)}`;
   $('#pPrev').disabled = st.page === 0; $('#pNext').disabled = st.page >= pages - 1;
   let h = '<table><thead><tr>' + FIXED.map((t, i) => `<th class="txt${i === 1 ? ' c2' : ''}" rowspan="2">${t}</th>`).join('');
@@ -1192,7 +1204,7 @@ async function exportCsv(){
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'ESGOTO_2026'];
   labels.forEach(l => FIELDS.forEach(f => head.push(`${f.h} ${l}`)));
-  head.push('MESES_PASSOU_A_PAGAR', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA');
+  head.push('MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA');
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   for (let i = 0; i < list.length; i += 5000){
     let chunk = '';
@@ -1204,7 +1216,7 @@ async function exportCsv(){
         FIELDS.forEach(f => row.push(q(cellVal(f.k, m * nR + r, true))));
         if (D.div[m * nR + r]) dv.push(labels[r]);
       }
-      row.push(q(changeMonths(m, 1).join(', ')), q(changeMonths(m, 0).join(', ')), q(dv.join(', ')));
+      row.push(q(D.ligMes[m] > 0 ? labels[D.ligMes[m]] : ''), q(D.ecoNov[m] || ''), q(changeMonths(m, 1).join(', ')), q(changeMonths(m, 0).join(', ')), q(dv.join(', ')));
       chunk += row.join(';') + '\r\n';
     }
     parts.push(chunk);
@@ -1298,7 +1310,7 @@ $('#chips').onclick = e => {
 let tSearch; $('#cSearch').oninput = () => { clearTimeout(tSearch); tSearch = setTimeout(() => renderCons(true), 250); };
 $('#cMov').onchange = () => { fillMes(); renderCons(true); };
 $('#cMes').onchange = () => renderCons(true);
-$('#btnDiv').onclick = () => { $('#cMov').value = 'diverg'; fillMes(); $('#cMes').value = String(D.refs.length - 1); showTab('cons'); };
+$('#btnDiv').onclick = () => { $('#cMov').value = 'diverg'; fillMes(); $('#cMes').value = String(D.refs.length - 1); renderCons(true); };
 $('#cSort').onchange = () => renderCons(true);
 $('#pPrev').onclick = () => { st.page--; renderCons(false); $('#tblCons').scrollTop = 0; };
 $('#pNext').onclick = () => { st.page++; renderCons(false); $('#tblCons').scrollTop = 0; };
