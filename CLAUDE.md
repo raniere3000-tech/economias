@@ -72,31 +72,32 @@ O botão "📁 Conectar pasta" usa `showDirectoryPicker`, que só existe no Chro
 
 | Derivado | O que é |
 |---|---|
-| `hasE[j]` | 1 quando `TIPO_FATURAMENTO` contém "ESGOTO" (sem acento, maiúsculas). Ausente na referência = sem esgoto. |
-| `div[j]` | Divergência: `1` = tem esgoto e `Qtd_eco_fat_esgoto ≠ Eco_total`; `2` = sem tipo esgoto mas `Qtd_eco_fat_esgoto > 0`. |
-| `entra[m]` | Referência da **primeira** troca de sem esgoto para com esgoto em 2026, só para quem não tinha esgoto em dez/25; `-1` se não houver. |
-| `nova[m]` | 1 para matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO (`entra[m]` igual à primeira referência em que a matrícula aparece). |
+| `hasE[j]` | Faturando esgoto no mês: 1 quando `Qtd_eco_fat_esgoto > 0` (desde a v1.12). O `TIPO_FATURAMENTO` da exportação é o tipo **atual** da matrícula, não o de cada referência, por isso não entra em nenhuma conta. Ausente na referência = não faturando. |
+| `div[j]` | Divergência, só em mês faturando esgoto: `1` = `Qtd_eco_fat_esgoto ≠ Eco_total`; `2` = economias de esgoto sem valor em `Faturamento_bruto_direta_esgoto`. |
+| `entra[m]` | Referência em que a matrícula passa a faturar esgoto **pela primeira vez** em 2026, só para quem não faturava em dez/25; `-1` se não houver. |
+| `nova[m]` | 1 para matrícula nova: aparece na base pela primeira vez em 2026 já faturando esgoto (`entra[m]` igual à primeira referência em que a matrícula aparece). |
 | `ligMes[m]` | Mês em que a matrícula passa a contar como ligação que passou a faturar esgoto: o primeiro mês em que soma economias novas (troca ou aumento); `-1` se não somar. Usado no Resumo e nos filtros do Consolidado. |
 | `ecoNov[m]` | Economias novas da matrícula em 2026 (troca + aumentos). |
 | `anyOut[m]` | 1 se deixou de faturar esgoto em algum mês. |
-| `yStat[m]` | Situação no ano (coluna "Esgoto em 2026"): 0 sem esgoto, 1 já pagava, 2 passou a faturar em 2026, 3 deixou de faturar, 4 já pagava e aumentou economias em 2026, 5 AGUA E ESGOTO sem economias de esgoto faturadas. 2 e 4 são exatamente as ligações com `ligMes > 0`. |
+| `yStat[m]` | Situação no ano (coluna "Esgoto em 2026"): 0 sem esgoto faturado, 1 já faturava, 2 nova faturando em 2026, 3 deixou de faturar, 4 já faturava e passou a faturar mais economias em 2026. 2 e 4 são exatamente as ligações com `ligMes > 0`. |
 
 ## Regras de negócio (definidas com o usuário)
 
 Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é sempre com o mês anterior.
 
-- **Troca:** a ligação estava com AGUA (ou não existia) e passou para AGUA E ESGOTO. Conta a `Qtd_eco_fat_esgoto` do mês da troca, **só na primeira vez** em 2026 (`r === entra[m]`). Ligação nova que já aparece com esgoto entra aqui.
-- **Aumento:** a ligação tinha esgoto no mês anterior e no atual, e a `Qtd_eco_fat_esgoto` subiu. Conta a diferença; por exemplo, de 10 para 12 soma 2. **Soma ao total** de economias novas.
+- **Faturando esgoto (regra da v1.12, definida pelo usuário):** a matrícula fatura esgoto num mês quando a `Qtd_eco_fat_esgoto` é maior que 0, qualquer que seja o tipo. O `TIPO_FATURAMENTO` da base é o atual: a matrícula pode estar como AGUA hoje e ter faturado esgoto antes. Veio da conferência de jul/26 em Miracema (planilha do usuário com 744 matrículas e 774 economias, painel com +732), em que 4 matrículas com tipo AGUA faturavam esgoto e matrículas AGUA E ESGOTO com 0 economias em dez/25 eram tratadas como já faturando.
+- **Troca (entrada):** a matrícula não faturava esgoto no mês anterior (ou não existia) e passou a faturar. Conta a `Qtd_eco_fat_esgoto` do mês, **só na primeira vez** em 2026 (`r === entra[m]`). Matrícula nova que já aparece faturando esgoto entra aqui.
+- **Aumento:** a matrícula faturava esgoto no mês anterior e no atual, e a `Qtd_eco_fat_esgoto` subiu. Conta a diferença; por exemplo, de 10 para 12 soma 2. **Soma ao total** de economias novas.
 - **Contagem de economias (decidido na v1.3):** vale a `Qtd_eco_fat_esgoto`, a quantidade de economias que fatura esgoto de fato. Na v1.2 foi testado contar o `Eco_total` em toda ligação com AGUA E ESGOTO; o usuário achou o número muito abaixo e descartou.
 - **Economias novas no mês:** troca + aumento. O total do ano é a soma dos meses, sem desconto de saídas.
 - **Origem (como o Resumo mostra as economias novas):** o usuário não quer ver a separação "X por troca e Y por aumento". As economias novas aparecem divididas pela origem da ligação: **ligações que já estavam na base** (passaram de AGUA para AGUA E ESGOTO) e **matrículas novas já com AGUA E ESGOTO** (`nova[m]`). O aumento continua somando, no grupo da ligação. Matrícula que não aparece em dez/25 e surge em 2026 já com esgoto conta como nova.
 - **Ligações que passaram a faturar esgoto (regra da v1.6):** são as mesmas matrículas que somam economias novas, por troca ou por aumento. Cada uma conta uma vez no ano, no primeiro mês em que soma economias, no grupo da sua origem. Ligação que já tinha esgoto em dez/25 e aumentou economias conta (caso da decisão judicial de jul/26). Troca com `Qtd_eco_fat_esgoto` 0 não soma economias e por isso também não conta ligação naquele mês. Antes da v1.6 só contava a troca de tipo, e o usuário viu +1.419 economias com só +311 ligações.
-- **Saídas (só para conhecimento):** a troca de AGUA E ESGOTO para AGUA conta as economias do mês anterior. A redução de economias em quem continua com esgoto também entra como saída informativa.
+- **Saídas (só para conhecimento):** a matrícula deixou de faturar esgoto (economias de esgoto foram a 0); conta as economias do mês anterior. A redução de economias em quem continua com esgoto também entra como saída informativa.
 - **Reentrada (só para conhecimento, não soma):** a ligação voltou a ter esgoto depois de sair. Isso vale para quem já tinha entrado em 2026 e também para quem já pagava em dez/25.
 - **Faturamento de esgoto das economias novas:** é calculado por coorte, em cada mês em que a ligação continua faturando esgoto.
   - Ligação que entrou por troca: conta o `Faturamento_bruto_direta_esgoto` inteiro, de `entra[m]` em diante.
   - Ligação que já pagava em dez/25 e aumentou economias: conta só a parte proporcional, `fe * (qe_atual − qe_dez) / qe_atual`, quando `qe_atual > qe_dez`.
-- **Faturando esgoto na base (v1.11):** a matrícula conta como faturando esgoto num mês quando o `TIPO_FATURAMENTO` tem ESGOTO **e** a `Qtd_eco_fat_esgoto` é maior que 0. Vale para "matrículas faturando esgoto na base" e "economias faturando esgoto na base" (dez/25 na linha do tempo) e para "Economias com esgoto faturadas" no gráfico de faturamento (`o.ligTot`, `o.ecoTot`).
+- **Faturando esgoto na base:** "matrículas faturando esgoto na base" e "economias faturando esgoto na base" (dez/25 na linha do tempo) e "Economias com esgoto faturadas" no gráfico de faturamento usam a mesma regra (`o.ligTot`, `o.ecoTot`). Na v1.11 exigiam também o tipo AGUA E ESGOTO; na v1.12 o tipo saiu.
 - **Faturamento existente:** faturamento de esgoto total do mês menos o faturamento das economias novas.
 - **Divergências:** aparecem numa linha discreta no Consolidado (desde a v1.7; no Resumo o usuário achou grande demais), contadas por ligação no último mês, com o link "Ver só as divergentes" que aplica o filtro.
 
@@ -196,6 +197,6 @@ python tests/conferir_totais.py base_teste.xlsx           # números de referên
 
 Valores de referência com a base sintética padrão (3000 matrículas, semente 7). Desde a v1.2 o gerador inclui ligações com AGUA E ESGOTO e economias de esgoto zeradas em mar/26 e abr/26 (1 a cada 37 matrículas):
 
-Base em dez/25: **154** matrículas e **245** economias faturando esgoto. **2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.466** ligações que passaram a faturar esgoto (1.324 já na base + 142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
+Base em dez/25: **154** matrículas e **245** economias faturando esgoto. **2.430** economias novas faturando (2.183 já existiam na base + 247 de matrículas novas), **1.516** matrículas novas faturando (1.374 já existiam na base + 142 novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.402.791**, economias que deixaram de faturar **536** e que voltaram a faturar **25**.
 
 Nunca suba arquivos `.xlsx` ou `.csv` para o repositório: o `.gitignore` já bloqueia, e os dados reais têm nomes de clientes.

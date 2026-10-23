@@ -229,7 +229,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.11</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.12</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -293,7 +293,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="card-topo">
         <div>
           <h2>Economias novas faturando esgoto, por mês</h2>
-          <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram de AGUA para AGUA E ESGOTO ou tiveram mais economias de esgoto faturadas) e as novas faturando de matrículas que entraram na base em 2026 já como AGUA E ESGOTO. As que deixaram de faturar não são descontadas.</p>
+          <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram a ter economias de esgoto faturadas ou faturaram mais economias de esgoto) e as novas faturando de matrículas que entraram na base em 2026 já faturando esgoto. As que deixaram de faturar não são descontadas.</p>
         </div>
         <div class="legenda"><span><i style="background:var(--marinho)"></i>Economias que já existiam na base</span><span><i style="background:var(--azul)"></i>Economias novas faturando em 2026</span></div>
       </div>
@@ -666,7 +666,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.11';
+const VERSAO_SITE = '1.12';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -823,7 +823,6 @@ function keepMask(){
 
 function derive(){
   const nM = D.mats.length, nR = D.refs.length, N = nM * nR;
-  const esg = D.dict.tipo.map(t => /ESGOTO/.test(String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()));
   D.hasE = new Uint8Array(N); D.div = new Uint8Array(N); D.divN = new Uint16Array(nM);
   D.yStat = new Uint8Array(nM); D.anyOut = new Uint8Array(nM); D.entra = new Int16Array(nM).fill(-1); D.nova = new Uint8Array(nM);
   D.ligMes = new Int16Array(nM).fill(-1); D.ecoNov = new Int32Array(nM);
@@ -831,9 +830,11 @@ function derive(){
     const b = m * nR;
     for (let r = 0; r < nR; r++){
       const j = b + r; if (!D.present[j]) continue;
-      const h = esg[D.tipo[j]] ? 1 : 0; D.hasE[j] = h;
-      if (h && D.qe[j] !== D.et[j]) D.div[j] = 1;          // esgoto faturado, mas economias de esgoto ≠ total
-      else if (!h && D.qe[j] > 0) D.div[j] = 2;            // economias de esgoto sem tipo com esgoto
+      // faturando esgoto no mês = Qtd_eco_fat_esgoto > 0. O TIPO_FATURAMENTO da exportação é o tipo atual da matrícula,
+      // não o de cada referência, por isso não entra na conta
+      const h = D.qe[j] > 0 ? 1 : 0; D.hasE[j] = h;
+      if (h && D.qe[j] !== D.et[j]) D.div[j] = 1;          // economias de esgoto ≠ total de economias
+      else if (h && !(D.fe[j] > 0)) D.div[j] = 2;          // economias de esgoto sem valor de esgoto faturado
       if (D.div[j]) D.divN[m]++;
     }
     let entered = D.hasE[b] === 1;
@@ -842,7 +843,7 @@ function derive(){
       if (h && !p && !entered){ entered = true; D.entra[m] = r; }
       if (!h && p) D.anyOut[m] = 1;
     }
-    // matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO
+    // matrícula nova: aparece na base pela primeira vez em 2026 já faturando esgoto
     let pr = 0; while (pr < nR && !D.present[b + pr]) pr++;
     if (D.entra[m] > 0 && D.entra[m] === pr) D.nova[m] = 1;
     // economias novas da matrícula em 2026 (mesmas regras de fluxos) e o mês em que ela passa a contar como ligação:
@@ -854,10 +855,10 @@ function derive(){
       else if (h && p){ const d = D.qe[j] - D.qe[j - 1]; if (d > 0) e = d; }
       if (e > 0){ D.ecoNov[m] += e; if (D.ligMes[m] < 0) D.ligMes[m] = r; }
     }
-    D.yStat[m] = D.ligMes[m] > 0 ? (D.hasE[b] ? 4 : 2) : D.anyOut[m] ? 3 : D.entra[m] > 0 ? 5 : D.hasE[b] ? 1 : 0;
+    D.yStat[m] = D.ligMes[m] > 0 ? (D.hasE[b] ? 4 : 2) : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
   }
 }
-// Entradas de economias (primeira troca para AGUA E ESGOTO + aumento em quem já pagava), separadas pela origem
+// Entradas de economias (primeira vez faturando esgoto em 2026 + aumento em quem já faturava), separadas pela origem
 // da ligação (já estava na base ou matrícula nova), ligações que passaram a faturar esgoto, faturamento de esgoto
 // separado entre economias que já existiam e economias novas de 2026 e, só para conhecimento, saídas e reentradas
 function fluxos(k){
@@ -873,7 +874,7 @@ function fluxos(k){
     for (let r = 0; r < nR; r++){
       const j = b + r;
       if (P[j]) o.fatTot[r] += F[j];
-      if (H[j] && Q[j] > 0){ o.ecoTot[r] += Q[j]; o.ligTot[r]++; }   // faturando esgoto: AGUA E ESGOTO com economias de esgoto faturadas
+      if (H[j]){ o.ecoTot[r] += Q[j]; o.ligTot[r]++; }   // faturando esgoto: economias de esgoto faturadas > 0
       if (D.div[j]) o.divMat[r]++;
       if (!r) continue;
       if (H[j]){
@@ -1094,8 +1095,8 @@ function renderResumo(){
   const s = D.stats;
   $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas com ULTIMO_CONTRATO = SIM em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}; ` +
     `${nf0.format(s.naoUltimo)} linhas de contratos anteriores desconsideradas. Economias novas faturando: Qtd_eco_fat_esgoto que passou a faturar em 2026, ` +
-    `pela troca do TIPO_FATURAMENTO de AGUA para AGUA E ESGOTO ou por mais economias de esgoto faturadas. Matrículas novas faturando: as matrículas dessas economias, ` +
-    `uma vez cada, no primeiro mês. Separação por origem: já existiam na base, ou novas faturando de matrículas que aparecem pela primeira vez em 2026 já com AGUA E ESGOTO. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
+    `quando a matrícula passa a ter economias de esgoto faturadas (o TIPO_FATURAMENTO é o atual e não entra na conta) ou fatura mais economias de esgoto. Matrículas novas faturando: as matrículas dessas economias, ` +
+    `uma vez cada, no primeiro mês. Separação por origem: já existiam na base, ou novas faturando de matrículas que aparecem pela primeira vez em 2026 já faturando esgoto. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
     (s.ignoradas.length ? ` Abas sem a coluna NUM_LIGACAO, ignoradas: ${s.ignoradas.join(', ')}.` : '');
 }
@@ -1120,8 +1121,8 @@ function segTable(el, used, names, T, S, money, title, sortKey, sel){
 }
 
 /* ---------- Consolidado ---------- */
-const YSTAT = ['Sem esgoto', 'Já faturava', 'Nova faturando em 2026', 'Deixou de faturar em 2026', 'Já faturava e passou a faturar mais economias em 2026', 'AGUA E ESGOTO sem economias de esgoto faturadas'];
-const YCLS = ['', '', 'pos', 'neg', 'pos', ''];
+const YSTAT = ['Sem esgoto faturado', 'Já faturava', 'Nova faturando em 2026', 'Deixou de faturar em 2026', 'Já faturava e passou a faturar mais economias em 2026'];
+const YCLS = ['', '', 'pos', 'neg', 'pos'];
 function buildChips(){
   $('#chips').innerHTML = FIELDS.map(f => `<button type="button" class="chip" data-f="${f.k}" aria-pressed="${visible.has(f.k)}">${f.l}</button>`).join('');
 }
@@ -1180,7 +1181,7 @@ function cellVal(f, j, forCsv){
     default: return forCsv ? String(D[f][j]) : nf0.format(D[f][j]);
   }
 }
-const DIVMSG = ['', 'Economias de esgoto diferentes do total de economias', 'Economias de esgoto sem faturamento de esgoto'];
+const DIVMSG = ['', 'Economias de esgoto diferentes do total de economias', 'Economias de esgoto sem valor de esgoto faturado'];
 const PAGE = 100;
 const FIXED = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'Esgoto em 2026'];
 function renderCons(recalc){
@@ -1194,7 +1195,7 @@ function renderCons(recalc){
   const k = keepMask(), L = nR - 1; let dL = 0;
   for (let m = 0, n = D.mats.length; m < n; m++) if (k[m] && D.div[m * nR + L]) dL++;
   $('#divNote').hidden = !dL;
-  if (dL) $('#divTxt').textContent = `⚠ Em ${labels[L]}, ${nf0.format(dL)} matrículas têm economias de esgoto diferentes do total de economias, ou economias de esgoto sem faturamento de esgoto.`;
+  if (dL) $('#divTxt').textContent = `⚠ Em ${labels[L]}, ${nf0.format(dL)} matrículas têm economias de esgoto diferentes do total de economias, ou economias de esgoto sem valor de esgoto faturado.`;
   $('#pInfo').textContent = `Página ${st.page + 1} de ${nf0.format(pages)}`;
   $('#pPrev').disabled = st.page === 0; $('#pNext').disabled = st.page >= pages - 1;
   let h = '<table><thead><tr>' + FIXED.map((t, i) => `<th class="txt${i === 1 ? ' c2' : ''}" rowspan="2">${t}</th>`).join('');

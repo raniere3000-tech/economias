@@ -19,13 +19,13 @@ for ws in wb.worksheets:
         if str(g('ULTIMO_CONTRATO') or '').strip().upper() != 'SIM':
             continue
         d = g('Referência'); k = (d.year, d.month); refs.add(k); m = g('NUM_LIGACAO')
-        T[m][k] = 'ESGOTO' in str(g('TIPO_FATURAMENTO') or '').upper()
         Q[m][k] = int(g('Qtd_eco_fat_esgoto') or 0)
+        T[m][k] = Q[m][k] > 0  # faturando esgoto no mês; o TIPO_FATURAMENTO é o atual e não entra na conta
         F[m][k] = float(g('Faturamento_bruto_direta_esgoto') or 0)
 refs = sorted(refs); n = len(refs)
 k0 = refs[0]
-base_mat = sum(1 for m in T if T[m].get(k0) and Q[m].get(k0, 0) > 0)
-base_eco = sum(Q[m][k0] for m in T if T[m].get(k0) and Q[m].get(k0, 0) > 0)
+base_mat = sum(1 for m in T if T[m].get(k0))
+base_eco = sum(Q[m][k0] for m in T if T[m].get(k0))
 z = lambda: [0.0] * n
 nov, aum, sai, red, ree, fat_tot, fat_novas = z(), z(), z(), z(), z(), z(), z()
 e_base, e_nova, lig, lig_nova, lig_aum = z(), z(), z(), z(), z()
@@ -64,7 +64,7 @@ rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","de
 print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
 for r in range(n):
     print(f'{rot[r]:7} {e_base[r]:8.0f} {e_nova[r]:10.0f} {nov[r]+aum[r]:6.0f} {lig[r]:9.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')
-print(f'Base em {rot[0]}: {base_mat:,.0f} matrículas e {base_eco:,.0f} economias faturando esgoto (AGUA E ESGOTO com economias de esgoto > 0)')
+print(f'Base em {rot[0]}: {base_mat:,.0f} matrículas e {base_eco:,.0f} economias faturando esgoto (economias de esgoto faturadas > 0)')
 print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_base):,.0f} + matrículas novas {sum(e_nova):,.0f})')
 print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já na base {sum(lig)-sum(lig_nova):,.0f} + matrículas novas {sum(lig_nova):,.0f})')
 print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{rot[r]} {lig_aum[r]:.0f}' for r in range(1, n)))
