@@ -78,6 +78,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .card-topo > div:first-child{flex:1 1 320px;min-width:0}
 .card-topo > .toggle,.card-topo > .card-acoes,.card-topo > .legenda{flex:0 0 auto}
 .card-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sel-mes{font:inherit;font-size:12.5px;padding:5px 10px;border:1px solid var(--linha);border-radius:8px;background:#fff;color:var(--marinho)}
 .legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--azul-claro)}
 .legenda i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 
@@ -229,7 +230,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.13</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.14</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -296,7 +297,11 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
           <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram a ter economias de esgoto faturadas ou faturaram mais economias de esgoto) e as novas faturando de matrículas que entraram na base em 2026 já faturando esgoto. As que deixaram de faturar não são descontadas.</p>
         </div>
         <div class="card-acoes">
-          <label class="field">Analítico <select id="anMes" aria-label="Mês do analítico"></select></label>
+          <label class="field">Analítico <select id="anTipo" aria-label="Conteúdo do analítico">
+            <option value="mov">Movimentos do mês</option>
+            <option value="todas">Todas as economias faturando</option>
+          </select></label>
+          <select id="anMes" class="sel-mes" aria-label="Mês do analítico"></select>
           <button class="btn-just" id="btnAnalitico" type="button" title="Uma linha por matrícula e mês com movimento de esgoto, com os filtros de cidade e sub-categoria">⬇ Baixar analítico</button>
         </div>
       </div>
@@ -670,7 +675,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.13';
+const VERSAO_SITE = '1.14';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -785,7 +790,7 @@ function setData(d){
   montaFiltro('fCid', 'Cidade', D.dict.cid, 'cidSel');
   montaFiltro('fSub', 'Sub-categoria', D.dict.sub, 'subSel');
   montaFiltro('fCidTab', 'Cidades na tabela', D.dict.cid, 'cidTab');
-  $('#anMes').innerHTML = '<option value="-1">Todos os meses</option>' + D.refs.slice(1).map((k, i) => `<option value="${i + 1}">${refLabel(k)}</option>`).join('');
+  fillAnMes();
   const first = refLabel(D.refs[0]), last = refLabel(D.refs[D.refs.length - 1]);
   const dt = new Date(D.meta.carregadoEm);
   $('#status').textContent = `${first} a ${last} · carregado em ${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -1262,6 +1267,14 @@ async function exportCsv(){
   baixa(parts, 'consolidado_esgoto.csv');
   prog(false); bloqueia(false);
 }
+// meses do analítico: movimentos começam no 1º mês de 2026; todas as economias incluem dez/25 e o último mês vem marcado
+function fillAnMes(){
+  const sel = $('#anMes'), todas = $('#anTipo').value === 'todas', prev = sel.value, from = todas ? 0 : 1;
+  sel.innerHTML = '<option value="-1">Todos os meses</option>' + D.refs.slice(from).map((k, i) => `<option value="${i + from}">${refLabel(k)}</option>`).join('');
+  // todas as economias em todos os meses pode passar do limite de linhas do Excel: começa no último mês
+  if (todas && (prev === '-1' || !prev)) sel.value = String(D.refs.length - 1);
+  else if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
 function baixa(parts, nome){
   const url = URL.createObjectURL(new Blob(parts, { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
@@ -1270,6 +1283,44 @@ function baixa(parts, nome){
 // Analítico: uma linha por matrícula e mês com movimento de esgoto, com as mesmas regras de fluxos().
 // Filtrando SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS é igual às economias novas faturando do Resumo,
 // e as linhas com CONTA_COMO_MATRICULA = SIM são as matrículas novas faturando.
+// Analítico de todas as economias: uma linha por matrícula e mês com economias de esgoto faturadas (ou valor de esgoto).
+// Somas por mês: ECO_ESGOTO_MES = "Economias com esgoto faturadas", ECO_NOVAS_FATURANDO = acumulado de economias novas
+// faturando que seguem faturando, FAT_ESGOTO_MES = faturamento de esgoto total, FAT_ESGOTO_NOVAS = faturamento das novas.
+async function exportTodas(){
+  const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
+  const r0 = mes >= 0 ? mes : 0, r1 = mes >= 0 ? mes : nR - 1, H = D.hasE, Q = D.qe, F = D.fe;
+  bloqueia(true); prog(true, 'Gerando o analítico de todas as economias', mes >= 0 ? labels[mes] : 'todos os meses', 0);
+  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'TIPO_FATURAMENTO_ATUAL',
+    'SITUACAO_NO_MES', 'ORIGEM', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS'];
+  const parts = ['\ufeff' + head.join(';') + '\r\n'];
+  let n = 0, linhas = 0; const L = nR - 1;
+  for (let r = r0; r <= r1; r++){
+    let chunk = '';
+    for (const m of D.ordMat){
+      if (!k[m]) continue;
+      const b = m * nR, j = b + r;
+      if (!D.present[j] || !(H[j] || F[j])) continue;
+      const nova = D.entra[m], base0 = H[b] ? Q[b] : 0;
+      let ecoN = 0, fn = 0, sit;
+      if (!H[j]) sit = 'Valor de esgoto sem economias de esgoto';
+      else if (r > 0 && nova > 0 && r >= nova){ ecoN = Q[j]; fn = F[j]; sit = 'Nova faturando em 2026'; }
+      else if (r > 0 && H[b] && Q[j] > base0){ ecoN = Q[j] - base0; fn = F[j] * ecoN / Q[j]; sit = 'Já faturava e fatura mais economias'; }
+      else sit = r === 0 ? 'Faturando na base' : H[b] ? 'Já faturava' : 'Voltou a faturar';
+      chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
+        D.dict.tipo[D.tipo[b + L]] || '', sit, D.nova[m] ? 'Nova na base' : 'Já existia na base', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
+        Q[j], ecoN || '', D.et[j], nf2.format(F[j]), fn ? nf2.format(fn) : ''].map(q).join(';') + '\r\n';
+      linhas++;
+    }
+    parts.push(chunk); n++;
+    prog(true, null, null, (r - r0 + 1) / (r1 - r0 + 1));
+    await new Promise(res => setTimeout(res));
+  }
+  prog(false); bloqueia(false);
+  if (!linhas){ toast('Não há economias faturando esgoto nesse mês com esses filtros.'); return; }
+  baixa(parts, `analitico_todas_economias_${mes >= 0 ? D.refs[mes] : 'todos_os_meses'}.csv`);
+  toast(`Analítico com ${nf0.format(linhas)} linhas.` + (linhas > 1048575 ? ' Passa do limite de linhas do Excel: escolha um mês só para abrir no Excel.' : ''));
+}
 async function exportAnalitico(){
   const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
   const r0 = mes > 0 ? mes : 1, r1 = mes > 0 ? mes : nR - 1;
@@ -1373,7 +1424,8 @@ $('#btnClear').onclick = async () => {
   location.reload();
 };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
-$('#btnAnalitico').onclick = () => { if (D && !rodando) exportAnalitico(); };
+$('#btnAnalitico').onclick = () => { if (D && !rodando) ($('#anTipo').value === 'todas' ? exportTodas : exportAnalitico)(); };
+$('#anTipo').onchange = () => { if (D) fillAnMes(); };
 ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
 document.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => {
   st.lt = b.dataset.lt;
