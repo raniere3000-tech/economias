@@ -91,9 +91,6 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 @media (max-width:1100px){.kpis-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:560px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-.toolbar .direita{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap}
-.contagem{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--azul-claro)}
-.contagem .toggle button{padding:4px 12px}
 
 /* ===== Linha do tempo ===== */
 .lt{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));min-width:1000px;margin-top:6px}
@@ -210,7 +207,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.2</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.3</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -234,18 +231,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <button type="button" class="active" data-tab="resumo" aria-pressed="true">Resumo</button>
     <button type="button" data-tab="cons" aria-pressed="false">Consolidado</button>
   </div>
-  <div class="direita">
-    <div class="contagem" title="Teste de regra: em ligações com AGUA E ESGOTO, contar o total de economias (Eco_total) ou as economias de esgoto faturadas (Qtd_eco_fat_esgoto)">
-      Contar economias por
-      <div class="toggle" role="group" aria-label="Contagem de economias">
-        <button type="button" class="active" data-cont="total" aria-pressed="true">Total de economias</button>
-        <button type="button" data-cont="esgoto" aria-pressed="false">Economias de esgoto faturadas</button>
-      </div>
-    </div>
-    <div class="filtros">
-      <div class="filtro-wrap" id="fCid"></div>
-      <div class="filtro-wrap" id="fSub"></div>
-    </div>
+  <div class="filtros">
+    <div class="filtro-wrap" id="fCid"></div>
+    <div class="filtro-wrap" id="fSub"></div>
   </div>
 </div>
 
@@ -645,7 +633,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.2';
+const VERSAO_SITE = '1.3';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -660,7 +648,7 @@ const signed = (v, f) => Math.abs(v) < 0.005 ? f(0) : (v > 0 ? '+' : '−') + f(
 const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 
 let D = null;
-const st = { cidSel: null, subSel: null, metric: 'eco', cont: 'total', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
+const st = { cidSel: null, subSel: null, metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
   { k: 'grp', h: 'COD_GRUPO', l: 'Grupo' },
@@ -825,21 +813,11 @@ function derive(){
     D.yStat[m] = D.entra[m] > 0 ? 2 : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
   }
 }
-// Economias usadas na contagem. 'total': em ligações com AGUA E ESGOTO vale o Eco_total, mesmo quando a
-// Qtd_eco_fat_esgoto vem 0 por exceção de faturamento; sem esgoto, 0. 'esgoto': a Qtd_eco_fat_esgoto como veio.
-function econs(){
-  if (st.cont === 'esgoto') return D.qe;
-  if (!D.qTot){
-    const N = D.et.length; D.qTot = new Int32Array(N);
-    for (let j = 0; j < N; j++) if (D.hasE[j]) D.qTot[j] = D.et[j];
-  }
-  return D.qTot;
-}
 // Entradas de economias (primeira troca para AGUA E ESGOTO + aumento em quem já pagava), separadas pela origem
 // da ligação (já estava na base ou matrícula nova), ligações que passaram a faturar esgoto, faturamento de esgoto
 // separado entre economias que já existiam e economias novas de 2026 e, só para conhecimento, saídas e reentradas
 function fluxos(k){
-  const nR = D.refs.length, P = D.present, H = D.hasE, Q = econs(), F = D.fe;
+  const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.qe, F = D.fe;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
   const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
@@ -993,7 +971,7 @@ function renderResumo(){
     { nome: 'Economias novas de 2026', cor: 'var(--marinho)', vals: novas, fmt: v => brl0.format(v) },
     { nome: 'Faturamento de esgoto total', cls: 'forte', vals: [...o.fatTot], fmt: v => brl0.format(v) },
     { nome: 'Participação das novas', vals: labels.map((_, r) => o.fatTot[r] ? o.fatNovas[r] / o.fatTot[r] * 100 : 0), fmt: v => nf1.format(v) + '%' },
-    { nome: st.cont === 'esgoto' ? 'Economias com esgoto faturadas' : 'Economias com esgoto (total de economias)', cls: 'mudo', vals: [...o.ecoTot], fmt: v => nf0.format(v) }
+    { nome: 'Economias com esgoto faturadas', cls: 'mudo', vals: [...o.ecoTot], fmt: v => nf0.format(v) }
   ]);
 
   const money = st.metric === 'fat';
@@ -1227,11 +1205,6 @@ $('#btnClear').onclick = async () => {
   location.reload();
 };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
-document.querySelectorAll('[data-cont]').forEach(b => b.onclick = () => {
-  st.cont = b.dataset.cont;
-  document.querySelectorAll('[data-cont]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
-  refresh();
-});
 document.querySelectorAll('[data-metric]').forEach(b => b.onclick = () => {
   st.metric = b.dataset.metric;
   document.querySelectorAll('[data-metric]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });

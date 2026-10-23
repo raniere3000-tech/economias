@@ -85,10 +85,7 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 
 - **Troca:** a ligação estava com AGUA (ou não existia) e passou para AGUA E ESGOTO. Conta a `Qtd_eco_fat_esgoto` do mês da troca, **só na primeira vez** em 2026 (`r === entra[m]`). Ligação nova que já aparece com esgoto entra aqui.
 - **Aumento:** a ligação tinha esgoto no mês anterior e no atual, e a `Qtd_eco_fat_esgoto` subiu. Conta a diferença; por exemplo, de 10 para 12 soma 2. **Soma ao total** de economias novas.
-- **Contagem de economias (em teste, o usuário ainda vai decidir):** um seletor na toolbar, "Contar economias por", escolhe a quantidade usada em todas as contas do Resumo (função `econs()`):
-  - **Total de economias** (padrão): em ligação com AGUA E ESGOTO vale o `Eco_total`, mesmo quando a `Qtd_eco_fat_esgoto` vem 0 por exceção de faturamento; sem esgoto, 0. Evita o falso "aumento" de quando a ligação zera por exceção e volta no mês seguinte.
-  - **Economias de esgoto faturadas:** a `Qtd_eco_fat_esgoto` como veio (regra da v1.1).
-  - O Consolidado (filtros de aumento e redução, ordenação) continua usando a `Qtd_eco_fat_esgoto`.
+- **Contagem de economias (decidido na v1.3):** vale a `Qtd_eco_fat_esgoto`, a quantidade de economias que fatura esgoto de fato. Na v1.2 foi testado contar o `Eco_total` em toda ligação com AGUA E ESGOTO; o usuário achou o número muito abaixo e descartou.
 - **Economias novas no mês:** troca + aumento. O total do ano é a soma dos meses, sem desconto de saídas.
 - **Origem (como o Resumo mostra as economias novas):** o usuário não quer ver a separação "X por troca e Y por aumento". As economias novas aparecem divididas pela origem da ligação: **ligações que já estavam na base** (passaram de AGUA para AGUA E ESGOTO) e **matrículas novas já com AGUA E ESGOTO** (`nova[m]`). O aumento continua somando, no grupo da ligação. Matrícula que não aparece em dez/25 e surge em 2026 já com esgoto conta como nova.
 - **Ligações novas:** quantidade de matrículas que passaram a faturar esgoto, contada no mês de `entra[m]`, uma vez só. Aumento de economias não conta ligação.
@@ -170,21 +167,18 @@ Uma linha por matrícula. As colunas cadastrais e "Esgoto em 2026" ficam fixas, 
 
 ## Pendências e ideias em aberto
 
-- **Regra de contagem:** o usuário vai comparar "Total de economias" e "Economias de esgoto faturadas" com a base real e decidir. Depois da decisão, tire o seletor e deixe só a regra escolhida (pergunte antes).
 - **Testes automatizados:** ainda não existem testes nem CI de interface. A validação foi feita com Playwright e Chromium sobre a base sintética, comparando com `tests/conferir_totais.py`.
 
 ## Como validar uma mudança
 
 ```bash
 python tests/gerar_base_teste.py 3000 base_teste.xlsx     # gera a base sintética (requer openpyxl)
-python tests/conferir_totais.py base_teste.xlsx total     # números de referência (total de economias)
-python tests/conferir_totais.py base_teste.xlsx esgoto    # números de referência (economias de esgoto faturadas)
+python tests/conferir_totais.py base_teste.xlsx           # números de referência
 # abra o index.html no Chrome/Edge, carregue base_teste.xlsx e compare com a saída acima
 ```
 
 Valores de referência com a base sintética padrão (3000 matrículas, semente 7). Desde a v1.2 o gerador inclui ligações com AGUA E ESGOTO e economias de esgoto zeradas em mar/26 e abr/26 (1 a cada 37 matrículas):
 
-- **Total de economias:** **2.344** economias novas (2.099 de ligações que já estavam na base + 245 de matrículas novas), **1.456** ligações novas (142 matrículas novas), faturamento de esgoto das novas em set/26 de **R$ 246.832**, no ano de **R$ 1.407.446**, e saídas de **520**.
-- **Economias de esgoto faturadas:** **2.394** economias novas (2.142 + 252), **1.456** ligações novas, faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
+**2.394** economias novas (2.142 de ligações que já estavam na base + 252 de matrículas novas), **1.456** ligações novas (142 matrículas novas), faturamento das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **537**.
 
 Nunca suba arquivos `.xlsx` ou `.csv` para o repositório: o `.gitignore` já bloqueia, e os dados reais têm nomes de clientes.
