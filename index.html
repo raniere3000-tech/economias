@@ -29,6 +29,7 @@ button,select,input{font:inherit;color:inherit}
 .header-linha{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap}
 .header-badge{display:inline-block;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#5ee7c8;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 11px;border-radius:20px}
 .header-exec h1{font-size:18px;font-weight:600;margin:0;line-height:1.2;letter-spacing:-.01em}
+.versao{font-size:11px;font-weight:500;color:#C8D4EA;font-variant-numeric:tabular-nums}
 .header-exec .status{font-size:12px;color:#cbd5e1;margin:0 0 0 auto}
 .acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
 .btn-top{padding:5px 12px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35)}
@@ -78,7 +79,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .legenda i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 
 /* ===== KPIs: faixa única ===== */
-.kpis-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;margin:10px 0;background:var(--linha);border:1px solid var(--linha);border-radius:8px;overflow:hidden}
+.kpis-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:1px;margin:10px 0;background:var(--linha);border:1px solid var(--linha);border-radius:8px;overflow:hidden}
 .kpi-card{background:#fff;padding:8px 12px;border-top:3px solid var(--marinho);min-width:0}
 .kpi-card.negativo{border-top-color:var(--laranja)}
 .kpi-card.destaque{background:var(--tint)}
@@ -185,6 +186,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
+      <span class="versao" id="versao" title="Versão do painel">v1.1</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -235,9 +237,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="card-topo">
         <div>
           <h2>Economias que passaram a faturar esgoto, por mês</h2>
-          <p class="nota-secao">Cada ligação conta só na primeira vez que passa a faturar esgoto em 2026. Aumento de economias em quem já pagava também soma. Saídas não são descontadas.</p>
+          <p class="nota-secao">Economias das ligações que já estavam na base e passaram de AGUA para AGUA E ESGOTO e das matrículas novas que já entraram como AGUA E ESGOTO. Cada ligação conta só na primeira vez em 2026. Aumento de economias em ligações com esgoto também soma, no grupo da ligação. Saídas não são descontadas.</p>
         </div>
-        <div class="legenda"><span><i style="background:var(--marinho)"></i>Troca de AGUA para AGUA E ESGOTO</span><span><i style="background:var(--azul)"></i>Aumento em quem já pagava</span></div>
+        <div class="legenda"><span><i style="background:var(--marinho)"></i>Ligações que já estavam na base</span><span><i style="background:var(--azul)"></i>Matrículas novas já com AGUA E ESGOTO</span></div>
       </div>
       <div class="bloco-rolagem"><div class="bloco" id="blocoEco"></div></div>
     </div>
@@ -603,7 +605,10 @@ self.onmessage = async ev => {
 <script>
 (() => {
 'use strict';
+// Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
+const VERSAO_SITE = '1.1';
 const $ = s => document.querySelector(s);
+$('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const refLabel = k => { const [y, m] = k.split('-'); return MESES[+m - 1] + '/' + y.slice(2); };
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -759,7 +764,7 @@ function derive(){
   const nM = D.mats.length, nR = D.refs.length, N = nM * nR;
   const esg = D.dict.tipo.map(t => /ESGOTO/.test(String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()));
   D.hasE = new Uint8Array(N); D.div = new Uint8Array(N); D.divN = new Uint16Array(nM);
-  D.yStat = new Uint8Array(nM); D.anyOut = new Uint8Array(nM); D.entra = new Int16Array(nM).fill(-1);
+  D.yStat = new Uint8Array(nM); D.anyOut = new Uint8Array(nM); D.entra = new Int16Array(nM).fill(-1); D.nova = new Uint8Array(nM);
   for (let m = 0; m < nM; m++){
     const b = m * nR;
     for (let r = 0; r < nR; r++){
@@ -775,20 +780,24 @@ function derive(){
       if (h && !p && !entered){ entered = true; D.entra[m] = r; }
       if (!h && p) D.anyOut[m] = 1;
     }
+    // matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO
+    let pr = 0; while (pr < nR && !D.present[b + pr]) pr++;
+    if (D.entra[m] > 0 && D.entra[m] === pr) D.nova[m] = 1;
     D.yStat[m] = D.entra[m] > 0 ? 2 : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
   }
 }
-// Entradas de economias (primeira troca para AGUA E ESGOTO + aumento em quem já pagava), faturamento de esgoto
+// Entradas de economias (primeira troca para AGUA E ESGOTO + aumento em quem já pagava), separadas pela origem
+// da ligação (já estava na base ou matrícula nova), ligações que passaram a faturar esgoto, faturamento de esgoto
 // separado entre economias que já existiam e economias novas de 2026 e, só para conhecimento, saídas e reentradas
 function fluxos(k){
   const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.qe, F = D.fe;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
-  const o = { nov: z(nR), aum: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
+  const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
     cidUsed: new Uint8Array(nC), subUsed: new Uint8Array(nS) };
   for (let m = 0, n = D.mats.length; m < n; m++){
     if (!k[m]) continue;
-    const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0;
+    const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0, eOrig = D.nova[m] ? o.eNova : o.eBase;
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
@@ -803,10 +812,10 @@ function fluxos(k){
       }
       const h = H[j], p = H[j - 1];
       let e = 0, out = 0;
-      if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; } else o.ree[r] += Q[j]; }
+      if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } else o.ree[r] += Q[j]; }
       else if (!h && p){ out = Q[j - 1]; o.sai[r] += out; }
       else if (h && p){ const d = Q[j] - Q[j - 1]; if (d > 0){ e = d; o.aum[r] += d; } else if (d < 0){ out = -d; o.red[r] += out; } }
-      if (e){ o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; }
+      if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; }
       if (out){ o.cidS[c] += out; o.subS[s] += out; }
     }
   }
@@ -870,6 +879,7 @@ function renderResumo(){
   const ent = r => o.nov[r] + o.aum[r];
   let total = 0, best = 1;
   for (let r = 1; r < nR; r++){ total += ent(r); if (ent(r) > ent(best)) best = r; }
+  const ligAno = sumFrom1(o.lig);
   const fatAno = sumFrom1(o.fatNovas), sai = sumFrom1(o.sai) + sumFrom1(o.red);
   const part = o.fatTot[L] ? o.fatNovas[L] / o.fatTot[L] * 100 : 0;
   const varFat = o.fatTot[0] ? (o.fatTot[L] - o.fatTot[0]) / o.fatTot[0] * 100 : 0;
@@ -877,7 +887,8 @@ function renderResumo(){
 
   $('#kpis').innerHTML = [
     { t: 'Economias novas em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
-    { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `em ${L} meses` },
+    { t: 'Ligações novas em 2026', v: mais(ligAno), d: 'passaram a faturar esgoto', c: 'destaque' },
+    { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `economias, em ${L} meses` },
     { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'mais economias novas' },
     { t: `Fat. esgoto das novas em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do faturamento de esgoto` },
     { t: 'Fat. esgoto das novas no ano', v: brl0.format(fatAno), d: `soma de ${labels[1]} a ${last}` },
@@ -892,16 +903,18 @@ function renderResumo(){
   // economias por mês
   const L1 = labels.slice(1), sl = a => L1.map((_, i) => a[i + 1]);
   const entA = L1.map((_, i) => ent(i + 1));
-  let acc = 0; const accA = entA.map(v => (acc += v));
+  let acc = 0, accL = 0; const accA = entA.map(v => (acc += v));
   $('#blocoEco').innerHTML = graficoAlinhado(L1, [
-    { nome: 'Troca de AGUA para AGUA E ESGOTO', values: sl(o.nov), cor: '#102840', corTexto: '#fff' },
-    { nome: 'Aumento em quem já pagava', values: sl(o.aum), cor: '#176b9c', corTexto: '#fff' }
+    { nome: 'Ligações que já estavam na base', values: sl(o.eBase), cor: '#102840', corTexto: '#fff' },
+    { nome: 'Matrículas novas já com AGUA E ESGOTO', values: sl(o.eNova), cor: '#176b9c', corTexto: '#fff' }
   ], { fmt: mais, fmtIn: v => nf0.format(v), aria: 'Economias que passaram a faturar esgoto por mês' }) +
   tabelaAlinhada(L1, [
-    { nome: 'Troca de AGUA para AGUA E ESGOTO', cor: 'var(--marinho)', vals: sl(o.nov), fmt: v => nf0.format(v) },
-    { nome: 'Aumento em quem já pagava', cor: 'var(--azul)', vals: sl(o.aum), fmt: v => nf0.format(v) },
+    { nome: 'Ligações que já estavam na base', cor: 'var(--marinho)', vals: sl(o.eBase), fmt: v => nf0.format(v) },
+    { nome: 'Matrículas novas já com AGUA E ESGOTO', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
     { nome: 'Economias novas no mês', cls: 'forte', vals: entA, fmt: mais },
     { nome: 'Acumulado em 2026', vals: accA, fmt: v => nf0.format(v) },
+    { nome: 'Ligações novas no mês', cls: 'forte', vals: sl(o.lig), fmt: mais },
+    { nome: 'Ligações acumuladas', vals: L1.map((_, i) => (accL += o.lig[i + 1])), fmt: v => nf0.format(v) },
     { nome: 'Saídas (só para conhecimento)', cls: 'info', vals: L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]), fmt: v => nf0.format(v) },
     { nome: 'Reentradas (não somadas)', cls: 'mudo', vals: sl(o.ree), fmt: v => nf0.format(v) }
   ]);

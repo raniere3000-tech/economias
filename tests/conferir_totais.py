@@ -25,12 +25,17 @@ for ws in wb.worksheets:
 refs = sorted(refs); n = len(refs)
 z = lambda: [0.0] * n
 nov, aum, sai, red, ree, fat_tot, fat_novas = z(), z(), z(), z(), z(), z(), z()
+e_base, e_nova, lig, lig_nova = z(), z(), z(), z()
 for m in T:
     h = [T[m].get(k, False) for k in refs]; q = [Q[m].get(k, 0) for k in refs]; f = [F[m].get(k, 0) for k in refs]
     entra = -1
     if not h[0]:
         for r in range(1, n):
             if h[r] and not h[r - 1]: entra = r; break
+    # matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO
+    prim = min(refs.index(k) for k in T[m])
+    nova = entra > 0 and entra == prim
+    e_orig = e_nova if nova else e_base
     for r in range(n):
         fat_tot[r] += f[r]
         if r == 0: continue
@@ -38,16 +43,19 @@ for m in T:
             if entra > 0 and r >= entra: fat_novas[r] += f[r]
             elif h[0] and q[r] > q[0] and q[r] > 0: fat_novas[r] += f[r] * (q[r] - q[0]) / q[r]
         if h[r] and not h[r - 1]:
-            if r == entra: nov[r] += q[r]
+            if r == entra:
+                nov[r] += q[r]; e_orig[r] += q[r]; lig[r] += 1
+                if nova: lig_nova[r] += 1
             else: ree[r] += q[r]
         elif h[r - 1] and not h[r]: sai[r] += q[r - 1]
         elif h[r] and h[r - 1]:
             d = q[r] - q[r - 1]
-            if d > 0: aum[r] += d
+            if d > 0: aum[r] += d; e_orig[r] += d
             elif d < 0: red[r] -= d
 rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][mm-1]}/{str(a)[2:]}' for a, mm in refs]
-print('mês      troca  aumento  novas  saídas  reentr.  fat_novas      fat_total')
+print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
 for r in range(n):
-    print(f'{rot[r]:7} {nov[r]:6.0f} {aum[r]:8.0f} {nov[r]+aum[r]:6.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')
-print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (troca {sum(nov):,.0f} + aumento {sum(aum):,.0f})')
+    print(f'{rot[r]:7} {e_base[r]:8.0f} {e_nova[r]:10.0f} {nov[r]+aum[r]:6.0f} {lig[r]:9.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')
+print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_base):,.0f} + matrículas novas {sum(e_nova):,.0f})')
+print(f'Ligações novas em 2026: {sum(lig):,.0f}  (matrículas novas {sum(lig_nova):,.0f})')
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')

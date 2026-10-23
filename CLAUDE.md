@@ -8,6 +8,7 @@ Contexto para continuar o desenvolvimento no Claude Code. Este arquivo resume tu
 - **Valide os números.** Confira toda mudança de cálculo com `tests/conferir_totais.py`, que recalcula os números em Python de forma independente.
 - **Mantenha um arquivo só.** O painel é um único `index.html`, sem build e sem dependências além das Google Fonts.
 - **Escreva em português do Brasil.** Os textos da interface e os comentários do código ficam em português.
+- **Aumente a versão a cada atualização.** A constante `VERSAO_SITE` no `index.html` aparece no cabeçalho (`<span id="versao">`). Suba a versão em toda mudança publicada, para identificar a versão em uso e poder voltar à anterior pelo histórico do Git.
 
 ## Objetivo
 
@@ -74,6 +75,7 @@ O botão "📁 Conectar pasta" usa `showDirectoryPicker`, que só existe no Chro
 | `hasE[j]` | 1 quando `TIPO_FATURAMENTO` contém "ESGOTO" (sem acento, maiúsculas). Ausente na referência = sem esgoto. |
 | `div[j]` | Divergência: `1` = tem esgoto e `Qtd_eco_fat_esgoto ≠ Eco_total`; `2` = sem tipo esgoto mas `Qtd_eco_fat_esgoto > 0`. |
 | `entra[m]` | Referência da **primeira** troca de sem esgoto para com esgoto em 2026, só para quem não tinha esgoto em dez/25; `-1` se não houver. |
+| `nova[m]` | 1 para matrícula nova: aparece na base pela primeira vez em 2026 já com AGUA E ESGOTO (`entra[m]` igual à primeira referência em que a matrícula aparece). |
 | `anyOut[m]` | 1 se deixou de faturar esgoto em algum mês. |
 | `yStat[m]` | Situação no ano: 0 sem esgoto, 1 já pagava, 2 passou a faturar em 2026, 3 deixou de faturar. |
 
@@ -84,6 +86,8 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Troca:** a ligação estava com AGUA (ou não existia) e passou para AGUA E ESGOTO. Conta a `Qtd_eco_fat_esgoto` do mês da troca, **só na primeira vez** em 2026 (`r === entra[m]`). Ligação nova que já aparece com esgoto entra aqui.
 - **Aumento:** a ligação tinha esgoto no mês anterior e no atual, e a `Qtd_eco_fat_esgoto` subiu. Conta a diferença; por exemplo, de 10 para 12 soma 2. **Soma ao total** de economias novas.
 - **Economias novas no mês:** troca + aumento. O total do ano é a soma dos meses, sem desconto de saídas.
+- **Origem (como o Resumo mostra as economias novas):** o usuário não quer ver a separação "X por troca e Y por aumento". As economias novas aparecem divididas pela origem da ligação: **ligações que já estavam na base** (passaram de AGUA para AGUA E ESGOTO) e **matrículas novas já com AGUA E ESGOTO** (`nova[m]`). O aumento continua somando, no grupo da ligação. Matrícula que não aparece em dez/25 e surge em 2026 já com esgoto conta como nova.
+- **Ligações novas:** quantidade de matrículas que passaram a faturar esgoto, contada no mês de `entra[m]`, uma vez só. Aumento de economias não conta ligação.
 - **Saídas (só para conhecimento):** a troca de AGUA E ESGOTO para AGUA conta as economias do mês anterior. A redução de economias em quem continua com esgoto também entra como saída informativa.
 - **Reentrada (só para conhecimento, não soma):** a ligação voltou a ter esgoto depois de sair. Isso vale para quem já tinha entrado em 2026 e também para quem já pagava em dez/25.
 - **Faturamento de esgoto das economias novas:** é calculado por coorte, em cada mês em que a ligação continua faturando esgoto.
@@ -110,8 +114,9 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
 
 ### Resumo
 
-1. **Faixa de 7 indicadores:**
+1. **Faixa de 8 indicadores:**
    - economias novas em 2026, em destaque;
+   - ligações novas em 2026, em destaque;
    - média por mês;
    - melhor mês;
    - faturamento de esgoto das novas no último mês, com a participação no total;
@@ -120,9 +125,9 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - saídas, com borda laranja.
 2. **Aviso de divergências**, quando houver.
 3. **Cartão "Economias que passaram a faturar esgoto, por mês":**
-   - colunas empilhadas: troca em marinho e aumento em azul;
+   - colunas empilhadas pela origem: ligações que já estavam na base em marinho e matrículas novas já com AGUA E ESGOTO em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
-   - embaixo, uma **tabela compacta alinhada às colunas** com troca, aumento, novas no mês, acumulado, saídas e reentradas.
+   - embaixo, uma **tabela compacta alinhada às colunas** com as duas origens, economias novas no mês, acumulado, ligações novas no mês, ligações acumuladas, saídas e reentradas.
    - O alinhamento funciona porque o SVG tem `viewBox` de 1000 de largura e área de rótulos de 180, enquanto a tabela usa `table-layout: fixed` com a primeira coluna em 18%. As demais colunas têm larguras iguais nos dois.
 4. **Cartão "Faturamento de esgoto por mês":** colunas empilhadas entre o que já existia (`#BCD0E1`) e as economias novas (marinho), de dez/25 a set/26, com o total em reais em cima. A tabela alinhada traz existente, novas, total, participação das novas e economias com esgoto faturadas.
 5. **Tabelas Por cidade e Por sub-categoria:**
@@ -157,8 +162,6 @@ Uma linha por matrícula. As colunas cadastrais e "Esgoto em 2026" ficam fixas, 
 
 ## Pendências e ideias em aberto
 
-- **Rótulos "troca" e "aumento":** o usuário perguntou o que significam. Foi oferecido renomear para "Ligações que passaram a ter esgoto" e "Economias acrescentadas em ligações que já tinham esgoto", mas isso **não foi decidido**. Confirme antes de mudar.
-- **Versão no cabeçalho:** no painel de faturamento existe a regra de aumentar a versão (`VERSAO_SITE` e `<span id="versao">`) a cada atualização. Este painel ainda não tem isso; vale perguntar se quer adotar.
 - **Testes automatizados:** ainda não existem testes nem CI de interface. A validação foi feita com Playwright e Chromium sobre a base sintética, comparando com `tests/conferir_totais.py`.
 
 ## Como validar uma mudança
@@ -169,6 +172,6 @@ python tests/conferir_totais.py base_teste.xlsx           # números de referên
 # abra o index.html no Chrome/Edge, carregue base_teste.xlsx e compare com a saída acima
 ```
 
-Valores de referência com a base sintética padrão (3000 matrículas, semente 7): **2.377** economias novas (troca 2.349 + aumento 28), faturamento de esgoto das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **520**.
+Valores de referência com a base sintética padrão (3000 matrículas, semente 7): **2.377** economias novas (2.130 de ligações que já estavam na base + 247 de matrículas novas; por dentro, troca 2.349 + aumento 28), **1.456** ligações novas (142 matrículas novas), faturamento de esgoto das novas em set/26 de **R$ 247.441**, no ano de **R$ 1.408.055**, e saídas de **520**.
 
 Nunca suba arquivos `.xlsx` ou `.csv` para o repositório: o `.gitignore` já bloqueia, e os dados reais têm nomes de clientes.
