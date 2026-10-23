@@ -1,0 +1,20 @@
+# Painel de economias de esgoto 2026
+
+Painel em HTML que consolida as bases mensais de faturamento (exportadas em .xlsx) e mostra quantas economias passaram a pagar esgoto em 2026, mês a mês, comparando com dezembro de 2025.
+
+## Como usar
+
+1. Abra o painel no Chrome ou no Edge.
+2. Clique em **Carregar arquivos** (um .xlsx com todas as abas, ou vários arquivos) ou em **Carregar pasta**.
+3. Aguarde a leitura. A base fica guardada no navegador e abre sozinha nas próximas vezes.
+4. Para atualizar, carregue os arquivos novos: eles substituem a base anterior.
+
+## Privacidade
+
+Os arquivos são lidos só no seu computador. Nenhum dado é enviado para a internet nem para este repositório. Nunca suba arquivos .xlsx ou .csv da base para cá.
+
+## Colunas esperadas em cada aba
+
+NUM_LIGACAO, NOM_CLIENTE, CIDADE, SUB_CATEGORIA, SIT_LIG, SIT_CONTRATO, Referência, ULTIMO_CONTRATO, COD_GRUPO, TIPO_FATURAMENTO, Faturamento_bruto_direta_agua, Faturamento_bruto_direta_esgoto, Qtd_eco_fat_agua, Qtd_eco_fat_esgoto, Eco_total.
+
+Só entram as linhas com ULTIMO_CONTRATO = SIM. Abas sem a coluna NUM_LIGACAO são ignoradas.
