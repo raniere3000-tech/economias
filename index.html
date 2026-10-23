@@ -235,7 +235,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge">Águas do Rio · Esgoto</span>
       <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.16</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.17</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -741,7 +741,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.16';
+const VERSAO_SITE = '1.17';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1350,12 +1350,15 @@ function fillAnMes(){
 /* ---------- comparativo com as listas de virar para Água e Esgoto ---------- */
 const sitNome = s => [`Começou no mês previsto`, `Começou antes do previsto`, `Começou depois do previsto`,
   `Já faturava em ${refLabel(D.refs[0])}`, 'Ainda não faturou esgoto', 'Não está na base', 'Começou a faturar (mês previsto não identificado)'][s];
+const MESES_EXT = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const mesDoNome = n => MESES_EXT.findIndex(m => String(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(m)) + 1;
 function montaListas(){
   const nM = D.mats.length, idx = new Map(D.mats.map((s, i) => [s, i]));
   D.cmp = (D.listas || []).map(L => {
     // mês previsto: o mês do nome do arquivo, procurado entre as referências de 2026 da base (o ano da planilha
     // pode faltar ou vir diferente); sem mês no nome, vale a Referência da lista, se estiver na base
-    const mes = L.mes || (L.ref ? +L.ref.slice(5) : 0);
+    // o mês também sai do nome do arquivo aqui, para funcionar com bases guardadas por versões anteriores do painel
+    const mes = L.mes || mesDoNome(L.arquivos.join(' ')) || (L.ref ? +L.ref.slice(5) : 0);
     let rL = -1;
     for (let r = D.refs.length - 1; r >= 1; r--) if (+D.refs[r].slice(5) === mes){ rL = r; break; }
     if (rL < 0 && L.ref) rL = D.refs.indexOf(L.ref);
