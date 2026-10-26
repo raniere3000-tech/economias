@@ -124,6 +124,7 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
   - Gradiente `#0b2447 → #14375e → #1b4a76`, com o selo "Águas do Rio · Esgoto" em `#5ee7c8`.
   - Botões translúcidos com ícone e status à direita.
   - O progresso da leitura aparece dentro do próprio cabeçalho; não existe janela sobreposta.
+- **Ícone da aba (v1.21):** SVG embutido como data URI no `<head>` (sem arquivo separado): quadrado arredondado com o gradiente do cabeçalho e uma gota d'água no verde-água `#5ee7c8`, com uma onda marinho. A gota ocupa quase todo o quadrado para ficar legível em 16 px.
 - **Toolbar:**
   - Botão segmentado com as abas Resumo e Consolidado.
   - Filtros de Cidade e Sub-categoria em listas de seleção (Todas, Nenhuma e um selo com a quantidade marcada), no mesmo padrão do outro painel.
