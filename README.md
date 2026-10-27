@@ -11,7 +11,7 @@ Painel em HTML que consolida as bases mensais de faturamento (exportadas em .xls
 
 ## Estrutura da pasta
 
-Conecte a pasta que tem as subpastas **Esgoto** e **Água**. A base de esgoto (e as listas "Virar") fica em Esgoto; a base de água, em Água. Os arquivos da subpasta Água não entram na base de esgoto.
+Conecte a pasta que tem as subpastas **Esgoto** e **Água**. A base de esgoto (e as listas "Virar") fica em Esgoto; a base de água, em Água. Os arquivos da subpasta Água não entram na base de esgoto: viram a base do painel Água, que mostra as economias a mais de água em 2026 (novas entradas e aumentos de economias), com as mesmas regras e telas do painel de esgoto, usando Qtd_eco_fat_agua e Faturamento_bruto_direta_agua.
 
 ## Listas de comparação
 

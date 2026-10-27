@@ -240,7 +240,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.22</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.23</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -388,7 +388,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="card">
       <div class="cons-bar">
         <label class="field">Buscar <input type="search" id="cSearch" placeholder="Matrícula ou nome"></label>
-        <label class="field">Movimento do esgoto
+        <label class="field">Movimento de esgoto
           <select id="cMov">
             <option value="all">Todas as matrículas</option>
             <option value="entrou_ano">Novas faturando esgoto em 2026 (as matrículas do Resumo)</option>
@@ -615,19 +615,19 @@ class Store {
     this.rQa.push(Math.round(toNum(c[h.qa]))); this.rQe.push(Math.round(toNum(c[h.qe]))); this.rEt.push(Math.round(toNum(c[h.et])));
     this.stats.linhas++;
   }
-  build(){
+  build(servico){
     const refs = [...this.refMap.keys()].sort();
     const remap = new Uint16Array(refs.length); refs.forEach((k, i) => { remap[this.refMap.get(k)] = i; });
     const nM = this.mats.length, nR = refs.length, N = nM * nR;
     const present = new Uint8Array(N), grp = new Int32Array(N).fill(-1), tipo = new Uint16Array(N);
     const fa = new Float64Array(N), fe = new Float64Array(N), qa = new Int32Array(N), qe = new Int32Array(N), et = new Int32Array(N), ult = new Uint8Array(N);
-    const n = this.rMat.n, A = this.rMat.a, R = this.rRef.a, U = this.rUlt.a, QE = this.rQe.a;
+    const n = this.rMat.n, A = this.rMat.a, R = this.rRef.a, U = this.rUlt.a, QE = servico === 'agua' ? this.rQa.a : this.rQe.a;
     for (let i = 0; i < n; i++){
       const j = A[i] * nR + remap[R[i]];
-      // uma linha por matrícula e mês: vale a do último contrato; entre contratos iguais, a de mais economias de esgoto
+      // uma linha por matrícula e mês: vale a do último contrato; entre contratos iguais, a de mais economias do serviço
       if (present[j]){
         this.stats.repetidas++;
-        if (U[i] < ult[j] || (U[i] === ult[j] && QE[i] < qe[j])) continue;
+        if (U[i] < ult[j] || (U[i] === ult[j] && QE[i] < (servico === 'agua' ? qa[j] : qe[j]))) continue;
       }
       present[j] = 1; ult[j] = U[i]; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i];
       fa[j] = this.rFa.a[i]; fe[j] = this.rFe.a[i]; qa[j] = this.rQa.a[i]; qe[j] = this.rQe.a[i]; et[j] = this.rEt.a[i];
@@ -712,11 +712,11 @@ function juntaListas(listas){
   }
   return [...porRef.values()].sort((a, b) => (a.mes || 99) - (b.mes || 99) || String(a.ref).localeCompare(String(b.ref)));
 }
-async function processFiles(files){
+async function processFiles(files, servico){
   const S = new Store(), listas = [];
   for (let fi = 0; fi < files.length; fi++){
     const file = files[fi];
-    const lista = LISTA_RE.test(file.name) ? new Lista(file.name) : null;
+    const lista = servico !== 'agua' && LISTA_RE.test(file.name) ? new Lista(file.name) : null;
     if (lista) listas.push(lista);
     const label = files.length > 1 ? `Arquivo ${fi + 1} de ${files.length}: ${file.name}` : file.name;
     progress(label, 'Abrindo o arquivo…', 0, true);
@@ -754,13 +754,13 @@ async function processFiles(files){
   }
   if (!S.stats.linhas) throw new Error('Nenhuma linha válida encontrada. Confira se as abas têm a coluna NUM_LIGACAO no cabeçalho.');
   progress('Montando o consolidado', 'Organizando matrículas e referências…', 1, true);
-  const d = S.build();
+  const d = S.build(servico);
   d.listas = juntaListas(listas);
   return d;
 }
 self.onmessage = async ev => {
   try {
-    const d = await processFiles(ev.data.files);
+    const d = await processFiles(ev.data.files, ev.data.servico);
     const tr = [d.cid, d.sub, d.sl, d.sc, d.present, d.grp, d.tipo, d.fa, d.fe, d.qa, d.qe, d.et, d.ult].map(a => a.buffer);
     self.postMessage({ type: 'done', data: d }, tr);
   } catch (err){
@@ -774,7 +774,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.22';
+const VERSAO_SITE = '1.23';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -789,6 +789,35 @@ const signed = (v, f) => Math.abs(v) < 0.005 ? f(0) : (v > 0 ? '+' : '−') + f(
 const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 
 let D = null;
+// duas bases: esgoto e água. D aponta para a do painel escolhido; D.Q e D.F são as economias e o faturamento do serviço
+const DS = { esgoto: null, agua: null };
+const SVS = {
+  esgoto: { qcol: 'Qtd_eco_fat_esgoto', arq: 'esgoto' },
+  agua: { qcol: 'Qtd_eco_fat_agua', arq: 'agua' }
+};
+const SV = () => SVS[st.painel];
+// os textos são escritos para esgoto; no painel Água trocam a palavra (dados da base, como "AGUA E ESGOTO", não passam aqui)
+const T = s => st.painel !== 'agua' ? s : String(s).replace(/\besgoto\b/g, 'água').replace(/\bEsgoto\b/g, 'Água').replace(/\bESGOTO\b/g, 'AGUA');
+// nomes de colunas calculadas nos downloads: ESGOTO → AGUA também dentro do nome (PRIMEIRO_MES_FATURANDO_ESGOTO)
+const HC = c => st.painel !== 'agua' ? c : c.replace(/ESGOTO/g, 'AGUA');
+const textoOrig = new WeakMap(), attrOrig = new WeakMap();
+function traduzTela(){
+  for (const raiz of [$('#view-resumo'), $('#view-cons')]){
+    const w = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let n = w.currentNode; n; n = w.nextNode()){
+      if (n.nodeType === 1){
+        if (n.closest('#tblCons tbody')) continue;
+        for (const a of ['title', 'aria-label']) if (n.hasAttribute(a)){
+          const o = attrOrig.get(n) || {}; if (!(a in o)) o[a] = n.getAttribute(a); attrOrig.set(n, o); n.setAttribute(a, T(o[a]));
+        }
+      } else {
+        if (n.parentElement && n.parentElement.closest('#tblCons tbody')) continue;
+        if (!textoOrig.has(n)) textoOrig.set(n, n.nodeValue);
+        n.nodeValue = T(textoOrig.get(n));
+      }
+    }
+  }
+}
 const st = { painel: 'esgoto', aguaArquivos: [], cidSel: null, subSel: null, cidTab: null, lt: 'eco', lsv: 'mat', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
@@ -804,6 +833,7 @@ const visible = new Set(FIELDS.map(f => f.k));
 
 /* ---------- utilidades de interface ---------- */
 function toast(msg){
+  msg = T(msg);
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role', 'status');
   document.body.appendChild(t); setTimeout(() => t.remove(), 4500);
 }
@@ -843,55 +873,84 @@ async function idbDo(mode, fn){
 }
 const idbSave = v => idbDo('readwrite', s => s.put(v, 'atual'));
 const idbLoad = () => idbDo('readonly', s => s.get('atual'));
-const idbClear = () => idbDo('readwrite', s => { s.delete('pasta'); return s.delete('atual'); });
+const idbClear = () => idbDo('readwrite', s => { s.delete('pasta'); s.delete('agua'); return s.delete('atual'); });
+const idbSaveAgua = v => idbDo('readwrite', s => v ? s.put(v, 'agua') : s.delete('agua'));
+const idbLoadAgua = () => idbDo('readonly', s => s.get('agua'));
 const idbSavePasta = h => idbDo('readwrite', s => s.put(h, 'pasta'));
 const idbLoadPasta = () => idbDo('readonly', s => s.get('pasta'));
 
 /* ---------- carregamento ---------- */
-function loadFiles(list, fonte){
+// lê uma base num worker; servico 'esgoto' ou 'agua'
+function lerBase(files, servico){
+  return new Promise((res, rej) => {
+    let worker;
+    try { worker = new Worker(URL.createObjectURL(new Blob([$('#worker-src').textContent], { type: 'text/javascript' }))); }
+    catch (e){ rej(new Error('O navegador bloqueou o processamento. Use o Chrome ou o Edge atualizados.')); return; }
+    worker.onmessage = ev => {
+      const m = ev.data;
+      if (m.type === 'progress') prog(true, (servico === 'agua' ? 'Base de água · ' : 'Base de esgoto · ') + m.title, m.msg, m.pct);
+      else if (m.type === 'error'){ worker.terminate(); rej(new Error(m.message)); }
+      else if (m.type === 'done'){ worker.terminate(); res(m.data); }
+    };
+    worker.onerror = e => rej(new Error(e.message || 'Verifique se são arquivos .xlsx válidos.'));
+    worker.postMessage({ files, servico });
+  });
+}
+async function loadFiles(list, fonte){
   if (rodando) return;
   const todos = [...list].filter(f => /\.xlsx$/i.test(f.name) && !f.name.startsWith('~$'));
-  // arquivos dentro de uma subpasta "Água" são da base de água: não entram na base de esgoto
-  const pastaAgua = f => /(^|\/)agua\//.test(String(f.caminho || f.webkitRelativePath || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
-  st.aguaArquivos = todos.filter(pastaAgua).map(f => f.caminho || f.webkitRelativePath || f.name);
-  const files = todos.filter(f => !pastaAgua(f));
-  if (!files.length && todos.length){ progErro('Só foram encontrados arquivos de água.', 'Coloque a base de esgoto na subpasta Esgoto da pasta conectada.'); return; }
-  if (!files.length){ progErro('Nenhum arquivo .xlsx encontrado.', 'Confira se a pasta ou a seleção tem os arquivos exportados da base.'); return; }
-  files.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
-  let worker;
+  // arquivos dentro de uma subpasta "Água" são da base de água; os demais, da base de esgoto
+  const caminho = f => String(f.caminho || f.webkitRelativePath || '');
+  const pastaAgua = f => /(^|\/)agua\//.test(caminho(f).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+  const porPasta = todos.some(f => caminho(f));
+  const agua = todos.filter(pastaAgua), files = todos.filter(f => !pastaAgua(f));
+  if (!todos.length){ progErro('Nenhum arquivo .xlsx encontrado.', 'Confira se a pasta ou a seleção tem os arquivos exportados da base.'); return; }
+  const ordena = a => a.sort((x, y) => caminho(x).localeCompare(caminho(y)) || x.name.localeCompare(y.name));
+  ordena(files); ordena(agua);
+  const meta = fs => ({ arquivos: fs.map(f => f.name), carregadoEm: new Date().toISOString(), fonte: fonte || (fs.length > 1 ? fs.length + ' arquivos' : fs[0].name) });
+  bloqueia(true); prog(true, 'Lendo a base', 'Preparando…', 0);
   try {
-    const src = $('#worker-src').textContent;
-    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-  } catch (e){ progErro('O navegador bloqueou o processamento.', 'Use o Chrome ou o Edge atualizados.'); return; }
-  bloqueia(true);
-  prog(true, 'Lendo a base', 'Preparando…', 0);
-  worker.onmessage = async ev => {
-    const m = ev.data;
-    if (m.type === 'progress') prog(true, m.title, m.msg, m.pct);
-    else if (m.type === 'error'){ worker.terminate(); progErro('Não foi possível ler a base.', m.message); }
-    else if (m.type === 'done'){
-      worker.terminate();
-      const d = m.data;
-      d.meta = { agua: st.aguaArquivos, arquivos: files.map(f => f.name), carregadoEm: new Date().toISOString(), fonte: fonte || (files.length > 1 ? files.length + ' arquivos' : files[0].name) };
+    if (files.length){
+      const d = await lerBase(files, 'esgoto'); d.meta = meta(files); d.meta.agua = agua.map(caminho);
       prog(true, 'Guardando no navegador', 'Assim a base abre direto na próxima vez.', 1);
       try { await idbSave(d); } catch (e){ toast('Os dados não puderam ser guardados no navegador e valem só nesta sessão.'); }
-      prog(false); bloqueia(false);
-      setData(d);
+      DS.esgoto = prepara(d, 'esgoto');
     }
-  };
-  worker.onerror = e => { progErro('Não foi possível ler os arquivos.', e.message || 'Verifique se são arquivos .xlsx válidos.'); };
-  worker.postMessage({ files });
+    // base de água: só quando a leitura é de uma pasta (com subpastas); sem arquivos na subpasta Água, ela sai
+    if (porPasta){
+      let dA = null;
+      if (agua.length){ dA = await lerBase(agua, 'agua'); dA.meta = meta(agua); }
+      try { await idbSaveAgua(dA); } catch (e){ toast('A base de água não pôde ser guardada no navegador e vale só nesta sessão.'); }
+      DS.agua = dA ? prepara(dA, 'agua') : null;
+    }
+  } catch (e){ progErro('Não foi possível ler a base.', e.message); return; }
+  st.aguaArquivos = agua.map(caminho);
+  prog(false); bloqueia(false);
+  ativa();
 }
 
-function setData(d){
-  D = d;
-  st.aguaArquivos = (D.meta && D.meta.agua) || [];
+// prepara uma base lida: serviço, economias e faturamento do serviço, ordem das matrículas e derivados
+function prepara(d, servico){
+  d.servico = servico;
+  d.Q = servico === 'agua' ? d.qa : d.qe; d.F = servico === 'agua' ? d.fa : d.fe; d.qk = servico === 'agua' ? 'qa' : 'qe';
+  const ant = D; D = d;
   const nM = D.mats.length;
   const ord = new Int32Array(nM); for (let i = 0; i < nM; i++) ord[i] = i;
   const key = D.mats.map(s => { const n = Number(s); return isFinite(n) ? n : Infinity; });
   D.ordMat = ord.sort((a, b) => key[a] - key[b] || (D.mats[a] < D.mats[b] ? -1 : 1));
   derive();
-  st.cidSel = null; st.subSel = null; st.page = 0;
+  D = ant;
+  return d;
+}
+// mostra a base do painel escolhido
+function ativa(){
+  D = DS[st.painel];
+  const algum = DS.esgoto || DS.agua;
+  $('#empty').hidden = !!algum; $('#toolbar').hidden = !algum; $('#btnClear').hidden = !algum;
+  $('#subAbas').hidden = !D; $('#toolbar .filtros').hidden = !D;
+  if (!D){ $('#status').textContent = st.painel === 'agua' ? 'Base de água ainda não carregada' : 'Base de esgoto ainda não carregada'; if (algum) showTab(st.tab); return; }
+  if (DS.esgoto && DS.esgoto.meta && DS.esgoto.meta.agua) st.aguaArquivos = DS.esgoto.meta.agua;
+  st.cidSel = null; st.subSel = null; st.cidTab = null; st.page = 0; st.list = null;
   montaFiltro('fCid', 'Cidade', D.dict.cid, 'cidSel');
   montaFiltro('fSub', 'Sub-categoria', D.dict.sub, 'subSel');
   montaFiltro('fCidTab', 'Cidades na tabela', D.dict.cid, 'cidTab');
@@ -948,9 +1007,9 @@ function derive(){
       const j = b + r; if (!D.present[j]) continue;
       // faturando esgoto no mês = Qtd_eco_fat_esgoto > 0. O TIPO_FATURAMENTO da exportação é o tipo atual da matrícula,
       // não o de cada referência, por isso não entra na conta
-      const h = D.qe[j] > 0 ? 1 : 0; D.hasE[j] = h;
-      if (h && D.qe[j] !== D.et[j]) D.div[j] = 1;          // economias de esgoto ≠ total de economias
-      else if (h && !(D.fe[j] > 0)) D.div[j] = 2;          // economias de esgoto sem valor de esgoto faturado
+      const h = D.Q[j] > 0 ? 1 : 0; D.hasE[j] = h;
+      if (h && D.Q[j] !== D.et[j]) D.div[j] = 1;          // economias de esgoto ≠ total de economias
+      else if (h && !(D.F[j] > 0)) D.div[j] = 2;          // economias de esgoto sem valor de esgoto faturado
       if (D.div[j]) D.divN[m]++;
     }
     for (let r = 0; r < nR; r++) if (D.hasE[b + r]){ D.pri[m] = r; break; }   // primeiro mês faturando esgoto na base
@@ -968,8 +1027,8 @@ function derive(){
     for (let r = 1; r < nR; r++){
       const j = b + r, h = D.hasE[j], p = D.hasE[j - 1];
       let e = 0;
-      if (h && !p){ if (D.entra[m] === r) e = D.qe[j]; }
-      else if (h && p){ const d = D.qe[j] - D.qe[j - 1]; if (d > 0) e = d; }
+      if (h && !p){ if (D.entra[m] === r) e = D.Q[j]; }
+      else if (h && p){ const d = D.Q[j] - D.Q[j - 1]; if (d > 0) e = d; }
       if (e > 0){ D.ecoNov[m] += e; if (D.ligMes[m] < 0) D.ligMes[m] = r; }
     }
     D.yStat[m] = D.ligMes[m] > 0 ? (D.hasE[b] ? 4 : 2) : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
@@ -979,7 +1038,7 @@ function derive(){
 // da ligação (já estava na base ou matrícula nova), ligações que passaram a faturar esgoto, faturamento de esgoto
 // separado entre economias que já existiam e economias novas de 2026 e, só para conhecimento, saídas e reentradas
 function fluxos(k){
-  const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.qe, F = D.fe;
+  const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.Q, F = D.F;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
   const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), ligAum: z(nR), ligTot: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
@@ -1069,7 +1128,7 @@ function ligaDica(el){
     if (i < 0 || i >= d.n){ escondeDica(el); return; }
     const r = svg.querySelector('.realce'); r.setAttribute('x', GLBL + colW * i); r.setAttribute('visibility', 'visible');
     dicaEl.innerHTML = `<b class="mes">${esc(d.titulo(i))}</b>` + d.linhas(i).map(x => x === 'sep' ? '<hr>' :
-      `<div class="lin ${x.cls || ''}"><span>${x.cor ? `<i style="background:${x.cor}"></i>` : ''}${esc(x.nome)}</span><span>${esc(x.valor)}</span></div>`).join('');
+      `<div class="lin ${x.cls || ''}"><span>${x.cor ? `<i style="background:${x.cor}"></i>` : ''}${esc(T(x.nome))}</span><span>${esc(x.valor)}</span></div>`).join('');
     dicaEl.hidden = false;
     const w = dicaEl.offsetWidth, h = dicaEl.offsetHeight;
     let left = e.clientX + 16, top = e.clientY - h / 2;
@@ -1213,12 +1272,13 @@ function renderResumo(){
   const s = D.stats;
   $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}, com todos os contratos ` +
     `(${nf0.format(s.naoUltimo)} linhas de contratos anteriores, por troca de titularidade). Cada matrícula conta uma vez por mês: ` +
-    `${nf0.format(s.repetidas || 0)} linhas repetidas da mesma matrícula no mesmo mês ficaram de fora, valendo a do último contrato. Economias novas faturando: Qtd_eco_fat_esgoto que passou a faturar em 2026, ` +
+    `${nf0.format(s.repetidas || 0)} linhas repetidas da mesma matrícula no mesmo mês ficaram de fora, valendo a do último contrato. Economias novas faturando: ${SV().qcol} que passou a faturar em 2026, ` +
     `quando a matrícula passa a ter economias de esgoto faturadas (o TIPO_FATURAMENTO é o atual e não entra na conta) ou fatura mais economias de esgoto. Matrículas novas faturando: as matrículas dessas economias, ` +
     `uma vez cada, no primeiro mês. Separação por origem: já existiam na base, ou novas faturando de matrículas que aparecem pela primeira vez em 2026 já faturando esgoto. Economias que voltam a faturar depois de sair aparecem só para conhecimento.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
     (D.cmp && D.cmp.length ? ` Listas de comparação, fora dos totais: ${D.cmp.map(c => `${c.L.arquivos.join(', ')} (${c.label}, ${nf0.format(c.L.mats.length)} matrículas)`).join('; ')}.` : '') +
     (s.ignoradas.length ? ` Abas sem a coluna NUM_LIGACAO, ignoradas: ${s.ignoradas.join(', ')}.` : '');
+  traduzTela();
 }
 function segTable(el, used, names, T, S, money, title, sortKey, sel){
   const nR = D.refs.length, labels = D.refs.map(refLabel), nS = names.length;
@@ -1273,7 +1333,7 @@ function consList(){
   for (const m of D.ordMat){
     if (!k[m]) continue;
     if (q && !(digits ? D.mats[m].includes(q) : D.nomes[m].toUpperCase().includes(qU))) continue;
-    const q0 = D.qe[m * nR], qL = D.qe[m * nR + L];
+    const q0 = D.Q[m * nR], qL = D.Q[m * nR + L];
     delta[m] = qL - q0;
     let ok = true;
     switch (mov){
@@ -1328,16 +1388,16 @@ function renderCons(recalc){
   const start = st.page * PAGE, end = Math.min(list.length, start + PAGE);
   for (let i = start; i < end; i++){
     const m = list[i];
-    h += `<tr><td class="txt">${esc(D.mats[m])}</td><td class="txt c2">${esc(D.nomes[m])}</td><td class="txt">${esc(D.dict.cid[D.cid[m]])}</td><td class="txt">${esc(D.dict.sub[D.sub[m]])}</td><td class="txt">${esc(D.dict.sl[D.sl[m]])}</td><td class="txt">${esc(D.dict.sc[D.sc[m]])}</td><td class="txt ${YCLS[D.yStat[m]]}">${YSTAT[D.yStat[m]]}</td><td class="txt">${D.pri[m] >= 0 ? labels[D.pri[m]] : '–'}</td>`;
+    h += `<tr><td class="txt">${esc(D.mats[m])}</td><td class="txt c2">${esc(D.nomes[m])}</td><td class="txt">${esc(D.dict.cid[D.cid[m]])}</td><td class="txt">${esc(D.dict.sub[D.sub[m]])}</td><td class="txt">${esc(D.dict.sl[D.sl[m]])}</td><td class="txt">${esc(D.dict.sc[D.sc[m]])}</td><td class="txt ${YCLS[D.yStat[m]]}">${T(YSTAT[D.yStat[m]])}</td><td class="txt">${D.pri[m] >= 0 ? labels[D.pri[m]] : '–'}</td>`;
     for (let r = 0; r < nR; r++){
       const j = m * nR + r;
       fl.forEach((f, fi) => {
         let c = (fi === 0 ? 'gs' : '') + (f.k === 'tipo' || f.k === 'ult' ? ' txt' : ''), tip = '';
         if (f.k === 'tipo' && r){
-          if (changed(m, 1, r)){ c += ' chg-in'; tip = 'Passou a pagar esgoto neste mês'; }
-          else if (changed(m, 0, r)){ c += ' chg-out'; tip = 'Deixou de pagar esgoto neste mês'; }
+          if (changed(m, 1, r)){ c += ' chg-in'; tip = T('Passou a pagar esgoto neste mês'); }
+          else if (changed(m, 0, r)){ c += ' chg-out'; tip = T('Deixou de pagar esgoto neste mês'); }
         }
-        if ((f.k === 'qe' || f.k === 'et') && D.div[j]){ c += ' warn'; tip = DIVMSG[D.div[j]]; }
+        if ((f.k === D.qk || f.k === 'et') && D.div[j]){ c += ' warn'; tip = T(DIVMSG[D.div[j]]); }
         h += `<td class="${c}"${tip ? ` title="${tip}"` : ''}>${esc(cellVal(f.k, j))}</td>`;
       });
     }
@@ -1349,21 +1409,22 @@ function renderCons(recalc){
   const c1 = wrap.querySelector('thead th'); if (c1) wrap.style.setProperty('--c1w', c1.getBoundingClientRect().width + 'px');
   const r1 = wrap.querySelector('thead tr:first-child th.grp');
   if (r1) wrap.querySelectorAll('thead tr:nth-child(2) th').forEach(th => { th.style.top = r1.getBoundingClientRect().height + 'px'; });
+  traduzTela();
 }
 async function exportCsv(){
   const list = st.list || consList(), nR = D.refs.length, labels = D.refs.map(refLabel);
   if (!list.length){ toast('Não há matrículas para exportar com esses filtros.'); return; }
   bloqueia(true); prog(true, 'Gerando o CSV', `${nf0.format(list.length)} matrículas`, 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'ESGOTO_2026', 'PRIMEIRO_MES_FATURANDO_ESGOTO'];
+  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'ESGOTO_2026', 'PRIMEIRO_MES_FATURANDO_ESGOTO'].map(HC);
   labels.forEach(l => FIELDS.forEach(f => head.push(`${f.h} ${l}`)));
-  head.push('MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA', 'LISTAS_VIRAR');
+  head.push(...['MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026', 'MESES_TROCA_PARA_ESGOTO', 'MESES_DEIXOU_DE_PAGAR', 'MESES_COM_DIVERGENCIA', 'LISTAS_VIRAR'].map(HC));
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   for (let i = 0; i < list.length; i += 5000){
     let chunk = '';
     for (let x = i; x < Math.min(list.length, i + 5000); x++){
       const m = list[x];
-      const row = [D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], YSTAT[D.yStat[m]], D.pri[m] >= 0 ? labels[D.pri[m]] : ''].map(q);
+      const row = [D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], T(YSTAT[D.yStat[m]]), D.pri[m] >= 0 ? labels[D.pri[m]] : ''].map(q);
       const dv = [];
       for (let r = 0; r < nR; r++){
         FIELDS.forEach(f => row.push(q(cellVal(f.k, m * nR + r, true))));
@@ -1376,7 +1437,7 @@ async function exportCsv(){
     prog(true, null, null, i / list.length);
     await new Promise(r => setTimeout(r));
   }
-  baixa(parts, 'consolidado_esgoto.csv');
+  baixa(parts, `consolidado_${SV().arq}.csv`);
   prog(false); bloqueia(false);
 }
 // meses do analítico: movimentos começam no 1º mês de 2026; todas as economias incluem dez/25 e o último mês vem marcado
@@ -1425,7 +1486,7 @@ function itensFiltrados(c, k){
 function ecoLista(c, t){
   const nR = D.refs.length, m = t.m;
   if (m < 0) return c.L.qe[t.i] || c.L.et[t.i] || 0;
-  if (D.pri[m] >= 0) return D.qe[m * nR + D.pri[m]];
+  if (D.pri[m] >= 0) return D.Q[m * nR + D.pri[m]];
   for (let r = nR - 1; r >= 0; r--) if (D.present[m * nR + r]) return D.et[m * nR + r];
   return 0;
 }
@@ -1443,7 +1504,7 @@ function renderListas(){
     ${eco ? '<th>De esgoto faturadas na base no mês previsto</th>' : ''}</tr></thead><tbody>`;
   D.cmp.forEach((c, i) => {
     const it = itensFiltrados(c, k), cnt = [0, 0, 0, 0, 0, 0, 0]; let ecoB = 0;
-    it.forEach(t => { cnt[t.sit] += eco ? ecoLista(c, t) : 1; if (eco && t.m >= 0 && c.rL >= 0) ecoB += D.qe[t.m * nR + c.rL]; });
+    it.forEach(t => { cnt[t.sit] += eco ? ecoLista(c, t) : 1; if (eco && t.m >= 0 && c.rL >= 0) ecoB += D.Q[t.m * nR + c.rL]; });
     const tot = cnt.reduce((a, b) => a + b, 0);
     h += `<tr><td title="${esc(c.L.arquivos.join(', '))}"><b>${esc(c.label)}</b> <span class="mudo">${esc(c.L.arquivos.join(', '))}</span></td><td class="tot">${nf0.format(tot)}</td>` +
       [0, 1, 2, 3, 4].map(s => `<td>${btn(cnt[s], i + ':' + s)}</td>`).join('') + `<td class="info">${nf0.format(cnt[5])}</td>` +
@@ -1463,7 +1524,7 @@ async function exportListas(){
       const m = t.m, L = c.L, dentro = m >= 0;
       txt += [c.label, L.arquivos.join(', '), L.mats[t.i], dentro ? D.nomes[m] : L.nomes[t.i], dentro ? D.dict.cid[D.cid[m]] : L.cid[t.i], dentro ? D.dict.sub[D.sub[m]] : L.sub[t.i],
         sitNome(t.sit), dentro && D.pri[m] >= 0 ? labels[D.pri[m]] : '', dentro && D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', L.qe[t.i] || 0,
-        dentro && c.rL >= 0 ? D.qe[m * nR + c.rL] : '', dentro && D.pri[m] >= 0 ? D.qe[m * nR + D.pri[m]] : '', ecoLista(c, t)].map(q).join(';') + '\r\n';
+        dentro && c.rL >= 0 ? D.Q[m * nR + c.rL] : '', dentro && D.pri[m] >= 0 ? D.Q[m * nR + D.pri[m]] : '', ecoLista(c, t)].map(q).join(';') + '\r\n';
       n++;
     }
   }
@@ -1483,11 +1544,11 @@ function baixa(parts, nome){
 // faturando que seguem faturando, FAT_ESGOTO_MES = faturamento de esgoto total, FAT_ESGOTO_NOVAS = faturamento das novas.
 async function exportTodas(){
   const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
-  const r0 = mes >= 0 ? mes : 0, r1 = mes >= 0 ? mes : nR - 1, H = D.hasE, Q = D.qe, F = D.fe;
+  const r0 = mes >= 0 ? mes : 0, r1 = mes >= 0 ? mes : nR - 1, H = D.hasE, Q = D.Q, F = D.F;
   bloqueia(true); prog(true, 'Gerando o analítico de todas as economias', mes >= 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'TIPO_FATURAMENTO_ATUAL',
-    'SITUACAO_NO_MES', 'ORIGEM', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS', 'LISTAS_VIRAR'];
+    'SITUACAO_NO_MES', 'ORIGEM', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECO_ESGOTO_MES', 'ECO_NOVAS_FATURANDO', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'FAT_ESGOTO_NOVAS', 'LISTAS_VIRAR'].map(HC);
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, linhas = 0; const L = nR - 1;
   for (let r = r0; r <= r1; r++){
@@ -1503,7 +1564,7 @@ async function exportTodas(){
       else if (r > 0 && H[b] && Q[j] > base0){ ecoN = Q[j] - base0; fn = F[j] * ecoN / Q[j]; sit = 'Já faturava e fatura mais economias'; }
       else sit = r === 0 ? 'Faturando na base' : H[b] ? 'Já faturava' : 'Voltou a faturar';
       chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-        D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', sit, D.nova[m] ? 'Nova na base' : 'Já existia na base', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
+        D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', T(sit), D.nova[m] ? 'Nova na base' : 'Já existia na base', D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '',
         Q[j], ecoN || '', D.et[j], nf2.format(F[j]), fn ? nf2.format(fn) : '', listasDe(m)].map(q).join(';') + '\r\n';
       linhas++;
     }
@@ -1513,17 +1574,17 @@ async function exportTodas(){
   }
   prog(false); bloqueia(false);
   if (!linhas){ toast('Não há economias faturando esgoto nesse mês com esses filtros.'); return; }
-  baixa(parts, `analitico_todas_economias_${mes >= 0 ? D.refs[mes] : 'todos_os_meses'}.csv`);
+  baixa(parts, `analitico_todas_economias_${SV().arq}_${mes >= 0 ? D.refs[mes] : 'todos_os_meses'}.csv`);
   toast(`Analítico com ${nf0.format(linhas)} linhas.` + (linhas > 1048575 ? ' Passa do limite de linhas do Excel: escolha um mês só para abrir no Excel.' : ''));
 }
 async function exportAnalitico(){
   const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
   const r0 = mes > 0 ? mes : 1, r1 = mes > 0 ? mes : nR - 1;
-  const H = D.hasE, Q = D.qe;
+  const H = D.hasE, Q = D.Q;
   bloqueia(true); prog(true, 'Gerando o analítico', mes > 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'TIPO_FATURAMENTO_ATUAL',
-    'ORIGEM', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'];
+    'ORIGEM', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'].map(HC);
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, soma = 0;
   // ordem: mês e, dentro do mês, matrícula
@@ -1541,8 +1602,8 @@ async function exportAnalitico(){
         if (!mov) continue;
         const ant = D.present[j - 1] ? Q[j - 1] : '', at = D.present[j] ? Q[j] : '';
         chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-          D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', mov, soma1 ? 'SIM' : 'NÃO', ant, at,
-          soma1 ? conta : '', D.ligMes[m] === r ? 'SIM' : 'NÃO', D.present[j] ? D.et[j] : '', D.present[j] ? nf2.format(D.fe[j]) : '', listasDe(m)].map(q).join(';') + '\r\n';
+          D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', T(mov), soma1 ? 'SIM' : 'NÃO', ant, at,
+          soma1 ? conta : '', D.ligMes[m] === r ? 'SIM' : 'NÃO', D.present[j] ? D.et[j] : '', D.present[j] ? nf2.format(D.F[j]) : '', listasDe(m)].map(q).join(';') + '\r\n';
         n++; if (soma1) soma += conta;
       }
     }
@@ -1552,7 +1613,7 @@ async function exportAnalitico(){
   }
   prog(false); bloqueia(false);
   if (!n){ toast('Não há movimentos de esgoto nesse mês com esses filtros.'); return; }
-  baixa(parts, `analitico_esgoto_${mes > 0 ? D.refs[mes] : 'todos_os_meses'}.csv`);
+  baixa(parts, `analitico_${SV().arq}_${mes > 0 ? D.refs[mes] : 'todos_os_meses'}.csv`);
   toast(`Analítico com ${nf0.format(n)} linhas; ${nf0.format(soma)} economias somam no total.`);
 }
 
@@ -1560,9 +1621,9 @@ async function exportAnalitico(){
 function showTab(t){
   st.tab = t;
   document.querySelectorAll('[data-tab]').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
-  const agua = st.painel === 'agua';
-  $('#view-resumo').hidden = agua || t !== 'resumo'; $('#view-cons').hidden = agua || t !== 'cons'; $('#view-agua').hidden = !agua;
-  if (agua) renderAgua(); else if (t === 'resumo') renderResumo(); else renderCons(true);
+  const vazio = !D;
+  $('#view-resumo').hidden = vazio || t !== 'resumo'; $('#view-cons').hidden = vazio || t !== 'cons'; $('#view-agua').hidden = !vazio;
+  if (vazio) renderAgua(); else if (t === 'resumo') renderResumo(); else renderCons(true);
 }
 // painéis Esgoto e Água: título, selo e filtros acompanham o painel escolhido
 function showPainel(p){
@@ -1571,13 +1632,13 @@ function showPainel(p){
   const nome = p === 'agua' ? 'água' : 'esgoto';
   $('#titulo').textContent = document.title = `Entradas de economias de ${nome} 2026`;
   $('#badge').textContent = `Águas do Rio · ${p === 'agua' ? 'Água' : 'Esgoto'}`;
-  $('#subAbas').hidden = p === 'agua'; $('#toolbar .filtros').hidden = p === 'agua';
-  showTab(st.tab);
+  ativa();
 }
 function renderAgua(){
+  if (st.painel !== 'agua'){ $('#aguaStatus').textContent = 'Carregue a base de esgoto na subpasta Esgoto da pasta conectada.'; return; }
   const n = st.aguaArquivos.length;
   $('#aguaStatus').innerHTML = n
-    ? `<b>${n} arquivo(s) encontrados na subpasta Água</b>, separados da base de esgoto: ${st.aguaArquivos.map(esc).join(', ')}. O cálculo de água vai ser ligado quando as regras forem confirmadas.`
+    ? `<b>${n} arquivo(s) encontrados na subpasta Água</b>, separados da base de esgoto: ${st.aguaArquivos.map(esc).join(', ')}. Clique em ↻ Atualizar para ler a base de água.`
     : 'Nenhum arquivo de água ainda. Coloque a base na subpasta <b>Água</b> da pasta conectada e clique em ↻ Atualizar. Os arquivos de esgoto ficam na subpasta <b>Esgoto</b>.';
 }
 function refresh(){ if (!D) return; st.list = null; if (st.tab === 'resumo') renderResumo(); else renderCons(true); }
@@ -1691,7 +1752,9 @@ drop.addEventListener('drop', e => loadFiles(e.dataTransfer.files));
     try { pasta = await idbLoadPasta() || null; } catch (_) { pasta = null; }
     mostraFonte();
     const d = await idbLoad();
-    if (d && d.refs) setData(d);
+    if (d && d.refs) DS.esgoto = prepara(d, 'esgoto');
+    try { const dA = await idbLoadAgua(); if (dA && dA.refs) DS.agua = prepara(dA, 'agua'); } catch (_) {}
+    if (DS.esgoto || DS.agua) ativa();
   } catch (_) {}
 })();
 })();

@@ -1,10 +1,15 @@
 """Recalcula em Python, de forma independente, os números do Resumo do painel.
-Uso: python tests/conferir_totais.py base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
+Uso: python tests/conferir_totais.py [--agua] base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
+--agua: confere o painel Água, com Qtd_eco_fat_agua e Faturamento_bruto_direta_agua no lugar das colunas de esgoto.
 As listas "Virar" (opcionais) são comparadas pelo primeiro mês em que cada matrícula aparece faturando esgoto.
 Compare a saída com os indicadores e as tabelas do painel (mesmas regras do index.html)."""
 import sys, collections
 from openpyxl import load_workbook
 
+AGUA = '--agua' in sys.argv
+if AGUA: sys.argv.remove('--agua')
+COL_Q = 'Qtd_eco_fat_agua' if AGUA else 'Qtd_eco_fat_esgoto'
+COL_F = 'Faturamento_bruto_direta_agua' if AGUA else 'Faturamento_bruto_direta_esgoto'
 arq = sys.argv[1] if len(sys.argv) > 1 else 'base_teste.xlsx'
 wb = load_workbook(arq, read_only=True)
 T, Q, F, E = (collections.defaultdict(dict) for _ in range(4))
@@ -20,14 +25,14 @@ for ws in wb.worksheets:
         # todos os contratos entram; uma linha por matrícula e mês: a do último contrato (SIM), depois a de mais
         # economias de esgoto, e no empate a última lida
         d = g('Referência'); k = (d.year, d.month); refs.add(k); m = g('NUM_LIGACAO')
-        p = (str(g('ULTIMO_CONTRATO') or '').strip().upper() == 'SIM', int(g('Qtd_eco_fat_esgoto') or 0))
+        p = (str(g('ULTIMO_CONTRATO') or '').strip().upper() == 'SIM', int(g(COL_Q) or 0))
         if (m, k) in prio:
             repetidas += 1
             if p < prio[(m, k)]: continue
         prio[(m, k)] = p
-        Q[m][k] = int(g('Qtd_eco_fat_esgoto') or 0)
+        Q[m][k] = int(g(COL_Q) or 0)
         T[m][k] = Q[m][k] > 0  # faturando esgoto no mês; o TIPO_FATURAMENTO é o atual e não entra na conta
-        F[m][k] = float(g('Faturamento_bruto_direta_esgoto') or 0)
+        F[m][k] = float(g(COL_F) or 0)
         E[m][k] = int(g('Eco_total') or 0)
 refs = sorted(refs); n = len(refs)
 k0 = refs[0]

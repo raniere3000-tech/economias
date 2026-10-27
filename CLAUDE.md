@@ -12,6 +12,8 @@ Contexto para continuar o desenvolvimento no Claude Code. Este arquivo resume tu
 
 ## Objetivo
 
+Desde a v1.23 o painel tem dois painéis com as mesmas regras: **Esgoto** e **Água** (economias a mais de água: novas entradas e aumentos de economias, mês a mês, contra dez/25). O texto abaixo fala de esgoto; para água vale o mesmo trocando as colunas (ver "Painel Água").
+
 Medir quantas **economias** passaram a faturar esgoto em 2026, mês a mês, comparando com dezembro de 2025, e quanto isso representa no faturamento de esgoto. O foco são as economias, não as matrículas. As saídas aparecem só para conhecimento e **nunca são descontadas** do total.
 
 ## Origem
@@ -105,6 +107,15 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Faturamento existente:** faturamento de esgoto total do mês menos o faturamento das economias novas.
 - **Divergências:** aparecem numa linha discreta no Consolidado (desde a v1.7; no Resumo o usuário achou grande demais), contadas por ligação no último mês, com o link "Ver só as divergentes" que aplica o filtro.
 
+## Painel Água (v1.23)
+
+- **Regras (confirmadas pelo usuário):** as mesmas do esgoto, com `Qtd_eco_fat_agua` no lugar de `Qtd_eco_fat_esgoto` e `Faturamento_bruto_direta_agua` no lugar de `Faturamento_bruto_direta_esgoto`. Faturando água = `Qtd_eco_fat_agua > 0`; entradas e aumentos mês a mês com total no fim; nova entrada = quem não faturava água em dez/25 (matrículas novas ou que estavam cortadas em dez/25). Mesmas colunas e meses da base de esgoto.
+- **Duas bases (`DS.esgoto`, `DS.agua`):** cada uma lida num worker próprio (`lerBase(files, servico)`), a de água com os arquivos da subpasta Água. `D` aponta para a do painel escolhido (`ativa()`). `prepara(d, servico)` define `d.Q`/`d.F` (economias e faturamento do serviço: `qe`/`fe` no esgoto, `qa`/`fa` na água) e `d.qk`; todo o cálculo (`derive`, `fluxos`, Consolidado, analíticos, comparativo) usa `D.Q`/`D.F`, nunca `D.qe`/`D.fe` direto. No worker, `build(servico)` desempata linhas repetidas pelas economias do serviço. Listas Virar só no esgoto.
+- **Armazenamento:** a base de água fica na chave `agua` do IndexedDB. Ela é relida (ou apagada, se a subpasta Água estiver vazia) só quando a leitura vem de uma pasta; "Carregar arquivo" mexe só na base de esgoto.
+- **Textos:** escritos para esgoto. No painel Água, `T()` troca "esgoto/Esgoto/ESGOTO" por "água/Água/AGUA" (palavra inteira) e `traduzTela()` aplica isso aos textos e aos atributos `title`/`aria-label` de `#view-resumo` e `#view-cons`, guardando o original (volta ao trocar de painel). O corpo da tabela do Consolidado não passa por ela, para não mexer em dados como "AGUA E ESGOTO"; ali a situação e as dicas usam `T()` direto. Nomes de colunas calculadas nos downloads usam `HC()`, que troca ESGOTO por AGUA também dentro do nome (`PRIMEIRO_MES_FATURANDO_AGUA`); colunas da base (`Faturamento_bruto_direta_esgoto`…) não mudam. Arquivos: `analitico_agua_…`, `consolidado_agua.csv`. Ao escrever texto novo, evite construções que ficam erradas com "água" (ex.: "do esgoto").
+- **Sem base de água:** o painel Água mostra `#view-agua` com os arquivos achados na subpasta (ou a orientação de onde colocar).
+- **Teste:** a base de água de teste é a base de esgoto com as colunas de água e esgoto trocadas; o painel Água tem de dar os mesmos números do esgoto da base original (2.430 economias, 1.516 matrículas, set/26 2.164 economias, R$ 271.628 e R$ 247.441). `python tests/conferir_totais.py --agua base_agua.xlsx` confere a água.
+
 ## Vocabulário da interface (definido na v1.8)
 
 - **"Novas" é sempre "novas faturando":** as economias e matrículas não são necessariamente novas na base, e sim novas faturando esgoto. Use "economias novas faturando esgoto" e "matrículas novas faturando esgoto", em indicadores, gráficos, linha do tempo e tabelas.
@@ -127,8 +138,8 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
   - O progresso da leitura aparece dentro do próprio cabeçalho; não existe janela sobreposta.
 - **Ícone da aba (v1.21):** SVG embutido como data URI no `<head>` (sem arquivo separado): quadrado arredondado com o gradiente do cabeçalho e uma gota d'água no verde-água `#5ee7c8`, com uma onda marinho. A gota ocupa quase todo o quadrado para ficar legível em 16 px.
 - **Toolbar:**
-  - Painéis **Esgoto | Água** (v1.22, `st.painel`, `showPainel()`): o painel muda o título, o selo e o `<title>` ("Entradas de economias de água 2026"). Em Água, as subabas e os filtros somem.
-  - Subabas Resumo e Consolidado (só no painel Esgoto).
+  - Painéis **Esgoto | Água** (v1.22, `st.painel`, `showPainel()`): o painel muda o título, o selo e o `<title>` ("Entradas de economias de água 2026"). Os filtros recomeçam em "Todas" ao trocar de painel.
+  - Subabas Resumo e Consolidado nos dois painéis (somem no painel sem base).
   - Filtros de Cidade e Sub-categoria em listas de seleção (Todas, Nenhuma e um selo com a quantidade marcada), no mesmo padrão do outro painel.
 
 ### Resumo
@@ -197,7 +208,8 @@ Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês fa
 
 ## Pendências e ideias em aberto
 
-- **Painel Água (v1.22, em construção):** por enquanto só a aba e a separação dos arquivos da subpasta Água (`#view-agua`, `renderAgua()`). Objetivo do usuário: identificar as economias a mais de água em 2026, **novas entradas e aumentos de economias em relação a dez/25**, com resumo e gráficos no mesmo estilo do esgoto. A base ainda não chegou. Antes de calcular, confirmar com o usuário: colunas da base de água (as mesmas da de esgoto?), se as economias são `Qtd_eco_fat_agua`, se o aumento é contra dez/25 ou mês a mês como no esgoto, e o faturamento usado (`Faturamento_bruto_direta_agua`).
+- **Base real de água:** ainda não chegou (o usuário vai mandar para análise quando tiver). Quando chegar, conferir os números com ele e a dúvida abaixo.
+- **Tipo AGUA no painel Água:** o usuário comentou que as economias de água poderiam ser "o total de economias nas matrículas com tipo de faturamento somente AGUA". Por enquanto vale a mesma regra do esgoto (`Qtd_eco_fat_agua > 0`, sem olhar o tipo, que é o atual). Confirmar com a base em mãos.
 
 - **Testes automatizados:** ainda não existem testes nem CI de interface. A validação foi feita com Playwright e Chromium sobre a base sintética, comparando com `tests/conferir_totais.py`.
 
@@ -206,6 +218,7 @@ Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês fa
 ```bash
 python tests/gerar_base_teste.py 3000 base_teste.xlsx     # gera a base sintética (requer openpyxl)
 python tests/conferir_totais.py base_teste.xlsx           # números de referência
+python tests/conferir_totais.py --agua base_agua.xlsx     # painel Água (base de água de teste = base de esgoto com as colunas trocadas)
 python tests/gerar_lista_teste.py base_teste.xlsx 2026-07 "Julho - Virar para Agua e Esgoto.xlsx"
 python tests/conferir_totais.py base_teste.xlsx "Julho - Virar para Agua e Esgoto.xlsx"   # comparativo
 # no teste com Playwright, use nomes de arquivo sem acento: o setInputFiles daqui descarta arquivos com acento no nome
