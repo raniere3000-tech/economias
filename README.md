@@ -9,6 +9,10 @@ Painel em HTML que consolida as bases mensais de faturamento (exportadas em .xls
 3. Aguarde a leitura. A base fica guardada no navegador e abre sozinha nas próximas vezes.
 4. Para atualizar, carregue os arquivos novos: eles substituem a base anterior.
 
+## Estrutura da pasta
+
+Conecte a pasta que tem as subpastas **Esgoto** e **Água**. A base de esgoto (e as listas "Virar") fica em Esgoto; a base de água, em Água. Os arquivos da subpasta Água não entram na base de esgoto.
+
 ## Listas de comparação
 
 Planilhas com "Virar" no nome (por exemplo, "Julho - Virar para Água e Esgoto.xlsx") são tratadas como listas das matrículas que deveriam passar a faturar esgoto no mês do nome. Coloque-as na mesma pasta da base. Elas não entram nos totais: o painel só compara, no cartão "Comparativo com as listas de virar para Água e Esgoto", em que mês cada matrícula começou a faturar esgoto.

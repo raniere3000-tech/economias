@@ -47,6 +47,7 @@ Cada aba precisa ter, com o cabeçalho na linha em que aparece `NUM_LIGACAO` (a 
 - **Referência:** pode vir como data real do Excel (número de série) ou como texto `dd/mm/aaaa`. É normalizada para `AAAA-MM`.
 - **Abas ignoradas:** abas sem `NUM_LIGACAO` são ignoradas e listadas no rodapé.
 - **Listas de comparação (v1.15):** arquivo com "virar" no nome (ex.: "Julho - Virar para Água e Esgoto.xlsx") é uma lista de matrículas que deveriam passar a faturar esgoto no mês do nome. O worker guarda só as matrículas (com nome, cidade, sub-categoria e economias da própria lista) em `d.listas`, agrupadas por mês, e **nunca soma essas linhas à base**. O mês vem do nome do arquivo (janeiro a dezembro, sem acento) e, desde a v1.16, é procurado entre as referências de 2026 da base pelo mês, sem depender do ano. Na v1.15 o ano vinha do nome ou da Referência da lista: sem Referência ou com outro ano, o mês previsto não era achado e todas as matrículas que começaram a faturar caíam em "antes" (o usuário viu 706 de 770 em julho). Na v1.17 a página também tira o mês do nome do arquivo (`mesDoNome()` em `montaListas()`), porque uma base guardada no IndexedDB por versão anterior não tem o campo `mes` das listas (o usuário abriu o painel com a base lida pela v1.15 e viu o aviso de mês não identificado). Sem mês no nome, vale a Referência da lista; se nem assim o mês estiver na base, o cartão mostra um aviso e essas matrículas ficam na situação 6 ("mês previsto não identificado"), nunca em "antes". Também não filtram `ULTIMO_CONTRATO` (v1.18) e não exigem a coluna Referência.
+- **Estrutura da pasta (v1.22):** a pasta conectada (hoje "Nova pasta", dentro de "Painel Análise Esgoto" no OneDrive) tem as subpastas **Esgoto** (base de esgoto e listas Virar) e **Água** (base de água). Arquivo dentro de uma subpasta chamada "Água" (sem acento ou maiúscula também vale) **não entra na base de esgoto**: o caminho vem de `f.caminho` (montado em `coletaXlsx`) ou de `webkitRelativePath`. A lista desses arquivos fica em `st.aguaArquivos` e é guardada em `D.meta.agua`.
 - **Volume esperado:** cerca de 3 milhões de linhas no total. No teste, 600 mil linhas foram lidas em cerca de 7 segundos.
 
 ## Arquitetura (index.html)
@@ -126,7 +127,8 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
   - O progresso da leitura aparece dentro do próprio cabeçalho; não existe janela sobreposta.
 - **Ícone da aba (v1.21):** SVG embutido como data URI no `<head>` (sem arquivo separado): quadrado arredondado com o gradiente do cabeçalho e uma gota d'água no verde-água `#5ee7c8`, com uma onda marinho. A gota ocupa quase todo o quadrado para ficar legível em 16 px.
 - **Toolbar:**
-  - Botão segmentado com as abas Resumo e Consolidado.
+  - Painéis **Esgoto | Água** (v1.22, `st.painel`, `showPainel()`): o painel muda o título, o selo e o `<title>` ("Entradas de economias de água 2026"). Em Água, as subabas e os filtros somem.
+  - Subabas Resumo e Consolidado (só no painel Esgoto).
   - Filtros de Cidade e Sub-categoria em listas de seleção (Todas, Nenhuma e um selo com a quantidade marcada), no mesmo padrão do outro painel.
 
 ### Resumo
@@ -194,6 +196,8 @@ Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês fa
 - Não pediu ranking de cidades, comparação com meta nem destaques automáticos. Pergunte antes de incluir.
 
 ## Pendências e ideias em aberto
+
+- **Painel Água (v1.22, em construção):** por enquanto só a aba e a separação dos arquivos da subpasta Água (`#view-agua`, `renderAgua()`). Objetivo do usuário: identificar as economias a mais de água em 2026, **novas entradas e aumentos de economias em relação a dez/25**, com resumo e gráficos no mesmo estilo do esgoto. A base ainda não chegou. Antes de calcular, confirmar com o usuário: colunas da base de água (as mesmas da de esgoto?), se as economias são `Qtd_eco_fat_agua`, se o aumento é contra dez/25 ou mês a mês como no esgoto, e o faturamento usado (`Faturamento_bruto_direta_agua`).
 
 - **Testes automatizados:** ainda não existem testes nem CI de interface. A validação foi feita com Playwright e Chromium sobre a base sintética, comparando com `tests/conferir_totais.py`.
 

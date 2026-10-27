@@ -58,6 +58,9 @@ button,select,input{font:inherit;color:inherit}
 .toggle button{padding:4px 16px;border:0;border-radius:6px;background:transparent;color:var(--azul);cursor:pointer;font-size:12.5px;font-weight:600}
 .toggle button:hover{color:var(--marinho)}
 .toggle button.active{background:var(--marinho);color:#fff}
+.abas{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toggle.painel button{font-size:13px;padding:5px 18px}
+.toggle.painel button.active{background:var(--azul)}
 .filtros{display:flex;gap:8px;flex-wrap:wrap}
 .filtro-wrap{position:relative}
 .btn-filtro{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;border:1px solid var(--linha);background:#fff;color:var(--marinho);cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
@@ -235,9 +238,9 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 <header class="header-exec">
   <div class="header-inner">
     <div class="header-linha">
-      <span class="header-badge">Águas do Rio · Esgoto</span>
-      <h1>Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.21</span>
+      <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
+      <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
+      <span class="versao" id="versao" title="Versão do painel">v1.22</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -257,9 +260,15 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 </header>
 
 <div class="toolbar" id="toolbar" hidden>
-  <div class="toggle" role="group" aria-label="Visão">
-    <button type="button" class="active" data-tab="resumo" aria-pressed="true">Resumo</button>
-    <button type="button" data-tab="cons" aria-pressed="false">Consolidado</button>
+  <div class="abas">
+    <div class="toggle painel" role="group" aria-label="Painel">
+      <button type="button" class="active" data-painel="esgoto" aria-pressed="true">Esgoto</button>
+      <button type="button" data-painel="agua" aria-pressed="false">Água</button>
+    </div>
+    <div class="toggle" role="group" aria-label="Visão" id="subAbas">
+      <button type="button" class="active" data-tab="resumo" aria-pressed="true">Resumo</button>
+      <button type="button" data-tab="cons" aria-pressed="false">Consolidado</button>
+    </div>
   </div>
   <div class="filtros">
     <div class="filtro-wrap" id="fCid"></div>
@@ -365,6 +374,14 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     </div>
 
     <p class="rodape" id="foot"></p>
+  </section>
+
+  <section id="view-agua" hidden>
+    <div class="card">
+      <h2>Entradas de economias de água 2026</h2>
+      <p class="nota-secao">Aqui vão ficar as economias a mais de água em 2026: as novas entradas e os aumentos de economias em relação a dez/25, no mesmo estilo do painel de esgoto.</p>
+      <p id="aguaStatus"></p>
+    </div>
   </section>
 
   <section id="view-cons" hidden>
@@ -757,7 +774,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.21';
+const VERSAO_SITE = '1.22';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -772,7 +789,7 @@ const signed = (v, f) => Math.abs(v) < 0.005 ? f(0) : (v > 0 ? '+' : '−') + f(
 const cls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 
 let D = null;
-const st = { cidSel: null, subSel: null, cidTab: null, lt: 'eco', lsv: 'mat', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
+const st = { painel: 'esgoto', aguaArquivos: [], cidSel: null, subSel: null, cidTab: null, lt: 'eco', lsv: 'mat', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
   { k: 'grp', h: 'COD_GRUPO', l: 'Grupo' },
@@ -833,7 +850,12 @@ const idbLoadPasta = () => idbDo('readonly', s => s.get('pasta'));
 /* ---------- carregamento ---------- */
 function loadFiles(list, fonte){
   if (rodando) return;
-  const files = [...list].filter(f => /\.xlsx$/i.test(f.name) && !f.name.startsWith('~$'));
+  const todos = [...list].filter(f => /\.xlsx$/i.test(f.name) && !f.name.startsWith('~$'));
+  // arquivos dentro de uma subpasta "Água" são da base de água: não entram na base de esgoto
+  const pastaAgua = f => /(^|\/)agua\//.test(String(f.caminho || f.webkitRelativePath || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+  st.aguaArquivos = todos.filter(pastaAgua).map(f => f.caminho || f.webkitRelativePath || f.name);
+  const files = todos.filter(f => !pastaAgua(f));
+  if (!files.length && todos.length){ progErro('Só foram encontrados arquivos de água.', 'Coloque a base de esgoto na subpasta Esgoto da pasta conectada.'); return; }
   if (!files.length){ progErro('Nenhum arquivo .xlsx encontrado.', 'Confira se a pasta ou a seleção tem os arquivos exportados da base.'); return; }
   files.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
   let worker;
@@ -850,7 +872,7 @@ function loadFiles(list, fonte){
     else if (m.type === 'done'){
       worker.terminate();
       const d = m.data;
-      d.meta = { arquivos: files.map(f => f.name), carregadoEm: new Date().toISOString(), fonte: fonte || (files.length > 1 ? files.length + ' arquivos' : files[0].name) };
+      d.meta = { agua: st.aguaArquivos, arquivos: files.map(f => f.name), carregadoEm: new Date().toISOString(), fonte: fonte || (files.length > 1 ? files.length + ' arquivos' : files[0].name) };
       prog(true, 'Guardando no navegador', 'Assim a base abre direto na próxima vez.', 1);
       try { await idbSave(d); } catch (e){ toast('Os dados não puderam ser guardados no navegador e valem só nesta sessão.'); }
       prog(false); bloqueia(false);
@@ -863,6 +885,7 @@ function loadFiles(list, fonte){
 
 function setData(d){
   D = d;
+  st.aguaArquivos = (D.meta && D.meta.agua) || [];
   const nM = D.mats.length;
   const ord = new Int32Array(nM); for (let i = 0; i < nM; i++) ord[i] = i;
   const key = D.mats.map(s => { const n = Number(s); return isFinite(n) ? n : Infinity; });
@@ -1537,8 +1560,25 @@ async function exportAnalitico(){
 function showTab(t){
   st.tab = t;
   document.querySelectorAll('[data-tab]').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
-  $('#view-resumo').hidden = t !== 'resumo'; $('#view-cons').hidden = t !== 'cons';
-  if (t === 'resumo') renderResumo(); else renderCons(true);
+  const agua = st.painel === 'agua';
+  $('#view-resumo').hidden = agua || t !== 'resumo'; $('#view-cons').hidden = agua || t !== 'cons'; $('#view-agua').hidden = !agua;
+  if (agua) renderAgua(); else if (t === 'resumo') renderResumo(); else renderCons(true);
+}
+// painéis Esgoto e Água: título, selo e filtros acompanham o painel escolhido
+function showPainel(p){
+  st.painel = p;
+  document.querySelectorAll('[data-painel]').forEach(b => { const on = b.dataset.painel === p; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+  const nome = p === 'agua' ? 'água' : 'esgoto';
+  $('#titulo').textContent = document.title = `Entradas de economias de ${nome} 2026`;
+  $('#badge').textContent = `Águas do Rio · ${p === 'agua' ? 'Água' : 'Esgoto'}`;
+  $('#subAbas').hidden = p === 'agua'; $('#toolbar .filtros').hidden = p === 'agua';
+  showTab(st.tab);
+}
+function renderAgua(){
+  const n = st.aguaArquivos.length;
+  $('#aguaStatus').innerHTML = n
+    ? `<b>${n} arquivo(s) encontrados na subpasta Água</b>, separados da base de esgoto: ${st.aguaArquivos.map(esc).join(', ')}. O cálculo de água vai ser ligado quando as regras forem confirmadas.`
+    : 'Nenhum arquivo de água ainda. Coloque a base na subpasta <b>Água</b> da pasta conectada e clique em ↻ Atualizar. Os arquivos de esgoto ficam na subpasta <b>Esgoto</b>.';
 }
 function refresh(){ if (!D) return; st.list = null; if (st.tab === 'resumo') renderResumo(); else renderCons(true); }
 
@@ -1551,10 +1591,11 @@ function mostraFonte(){
   $('#btnUpdate').classList.toggle('primary', !!pasta);
   $('#btnFolder').classList.toggle('primary', !pasta);
 }
-async function coletaXlsx(dir, out){
+async function coletaXlsx(dir, out, caminho = ''){
   for await (const [nome, e] of dir.entries()){
-    if (e.kind === 'file'){ if (/\.xlsx$/i.test(nome) && !nome.startsWith('~$')) out.push(await e.getFile()); }
-    else await coletaXlsx(e, out);
+    if (e.kind === 'file'){
+      if (/\.xlsx$/i.test(nome) && !nome.startsWith('~$')){ const f = await e.getFile(); f.caminho = caminho + nome; out.push(f); }
+    } else await coletaXlsx(e, out, caminho + nome + '/');
   }
 }
 async function lePasta(h){
@@ -1596,6 +1637,7 @@ $('#btnClear').onclick = async () => {
   location.reload();
 };
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+document.querySelectorAll('[data-painel]').forEach(b => b.onclick = () => showPainel(b.dataset.painel));
 $('#btnAnalitico').onclick = () => { if (D && !rodando) ($('#anTipo').value === 'todas' ? exportTodas : exportAnalitico)(); };
 $('#anTipo').onchange = () => { if (D) fillAnMes(); };
 $('#btnListas').onclick = () => { if (D) exportListas(); };
