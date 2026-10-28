@@ -240,7 +240,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.23</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.24</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -310,7 +310,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
       <div class="card-topo">
         <div>
           <h2>Economias novas faturando esgoto, por mês</h2>
-          <p class="nota-secao">Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram a ter economias de esgoto faturadas ou faturaram mais economias de esgoto) e as novas faturando de matrículas que entraram na base em 2026 já faturando esgoto. As que deixaram de faturar não são descontadas.</p>
+          <p class="nota-secao" id="notaEco"></p>
         </div>
         <div class="card-acoes">
           <label class="field">Analítico <select id="anTipo" aria-label="Conteúdo do analítico">
@@ -321,7 +321,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
           <button class="btn-just" id="btnAnalitico" type="button" title="Uma linha por matrícula e mês com movimento de esgoto, com os filtros de cidade e sub-categoria">⬇ Baixar analítico</button>
         </div>
       </div>
-      <div class="legenda"><span><i style="background:var(--marinho)"></i>Economias que já existiam na base</span><span><i style="background:var(--azul)"></i>Economias novas faturando em 2026</span></div>
+      <div class="legenda" id="legEco"></div>
       <div class="bloco-rolagem"><div class="bloco" id="blocoEco"></div></div>
     </div>
 
@@ -774,7 +774,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.23';
+const VERSAO_SITE = '1.24';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -792,8 +792,10 @@ let D = null;
 // duas bases: esgoto e água. D aponta para a do painel escolhido; D.Q e D.F são as economias e o faturamento do serviço
 const DS = { esgoto: null, agua: null };
 const SVS = {
-  esgoto: { qcol: 'Qtd_eco_fat_esgoto', arq: 'esgoto' },
-  agua: { qcol: 'Qtd_eco_fat_agua', arq: 'agua' }
+  // regra 'mes': entrada só na 1ª vez e aumento mês a mês; regra 'teto': cada matrícula tem um teto de economias (o de
+  // dez/25 para quem já faturava) e só soma o que passar dele, uma vez (cortada e religada não volta a somar)
+  esgoto: { qcol: 'Qtd_eco_fat_esgoto', arq: 'esgoto', regra: 'mes' },
+  agua: { qcol: 'Qtd_eco_fat_agua', arq: 'agua', regra: 'teto' }
 };
 const SV = () => SVS[st.painel];
 // os textos são escritos para esgoto; no painel Água trocam a palavra (dados da base, como "AGUA E ESGOTO", não passam aqui)
@@ -1001,6 +1003,8 @@ function derive(){
   D.hasE = new Uint8Array(N); D.div = new Uint8Array(N); D.divN = new Uint16Array(nM);
   D.yStat = new Uint8Array(nM); D.anyOut = new Uint8Array(nM); D.entra = new Int16Array(nM).fill(-1); D.nova = new Uint8Array(nM);
   D.ligMes = new Int16Array(nM).fill(-1); D.ecoNov = new Int32Array(nM); D.pri = new Int16Array(nM).fill(-1);
+  D.ent = new Int32Array(N); D.mv = new Uint8Array(N); D.cat = new Uint8Array(N); D.ligCat = new Uint8Array(nM);
+  const teto = SVS[D.servico || 'esgoto'].regra === 'teto';
   for (let m = 0; m < nM; m++){
     const b = m * nR;
     for (let r = 0; r < nR; r++){
@@ -1019,17 +1023,31 @@ function derive(){
       if (h && !p && !entered){ entered = true; D.entra[m] = r; }
       if (!h && p) D.anyOut[m] = 1;
     }
-    // matrícula nova: aparece na base pela primeira vez em 2026 já faturando esgoto
+    // matrícula nova na base: no esgoto, aparece pela primeira vez em 2026 já faturando; na água, não estava na base em dez/25
     let pr = 0; while (pr < nR && !D.present[b + pr]) pr++;
-    if (D.entra[m] > 0 && D.entra[m] === pr) D.nova[m] = 1;
-    // economias novas da matrícula em 2026 (mesmas regras de fluxos) e o mês em que ela passa a contar como ligação:
-    // o primeiro mês em que soma economias novas, por troca ou por aumento
+    if (teto ? !D.present[b] && D.entra[m] > 0 : D.entra[m] > 0 && D.entra[m] === pr) D.nova[m] = 1;
+    // por mês: economias novas contadas (ent), grupo (cat: 1 novas na base, 2 já existiam/recuperadas de dez/25,
+    // 3 aumentos — só na regra 'teto') e movimento (mv: 1 passou a faturar, 2 passou a faturar mais economias — os dois
+    // somam —, 3 voltou a faturar, 4 deixou de faturar, 5 passou a faturar menos, 6 voltou a economias que já tinha)
+    let tetoM = D.hasE[b] ? D.Q[b] : 0;
     for (let r = 1; r < nR; r++){
-      const j = b + r, h = D.hasE[j], p = D.hasE[j - 1];
-      let e = 0;
-      if (h && !p){ if (D.entra[m] === r) e = D.Q[j]; }
-      else if (h && p){ const d = D.Q[j] - D.Q[j - 1]; if (d > 0) e = d; }
-      if (e > 0){ D.ecoNov[m] += e; if (D.ligMes[m] < 0) D.ligMes[m] = r; }
+      const j = b + r, h = D.hasE[j], p = D.hasE[j - 1], q = D.Q[j], qp = D.Q[j - 1];
+      let e = 0, mv = 0, cat = 0;
+      if (teto){
+        if (h && q > tetoM){
+          e = q - tetoM;
+          if (tetoM === 0){ mv = 1; cat = D.nova[m] ? 1 : 2; } else { mv = 2; cat = 3; }
+          tetoM = q;
+        } else if (h && !p) mv = 3;
+        else if (h && p && q > qp) mv = 6;
+      } else {
+        if (h && !p){ if (D.entra[m] === r){ e = q; mv = 1; } else mv = 3; }
+        else if (h && p && q > qp){ e = q - qp; mv = 2; }
+        if (e) cat = D.nova[m] ? 1 : 2;
+      }
+      if (!mv){ if (!h && p) mv = 4; else if (h && p && q < qp) mv = 5; }
+      D.ent[j] = e; D.mv[j] = mv; D.cat[j] = cat;
+      if (e > 0){ D.ecoNov[m] += e; if (D.ligMes[m] < 0){ D.ligMes[m] = r; D.ligCat[m] = cat; } }
     }
     D.yStat[m] = D.ligMes[m] > 0 ? (D.hasE[b] ? 4 : 2) : D.anyOut[m] ? 3 : D.hasE[b] ? 1 : 0;
   }
@@ -1040,12 +1058,12 @@ function derive(){
 function fluxos(k){
   const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.Q, F = D.F;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
-  const o = { nov: z(nR), aum: z(nR), eBase: z(nR), eNova: z(nR), lig: z(nR), ligNova: z(nR), ligAum: z(nR), ligTot: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
+  const o = { ent: z(nR), aum: z(nR), eC: [null, z(nR), z(nR), z(nR)], lig: z(nR), ligC: [null, z(nR), z(nR), z(nR)], ligAum: z(nR), ligTot: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
     cidUsed: new Uint8Array(nC), subUsed: new Uint8Array(nS) };
   for (let m = 0, n = D.mats.length; m < n; m++){
     if (!k[m]) continue;
-    const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0, eOrig = D.nova[m] ? o.eNova : o.eBase;
+    const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0;
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
@@ -1059,15 +1077,22 @@ function fluxos(k){
         else if (H[b] && Q[j] > base0 && Q[j] > 0) fn = F[j] * (Q[j] - base0) / Q[j]; // parte das economias acrescentadas
         if (fn){ o.fatNovas[r] += fn; o.cidF[c * nR + r] += fn; o.subF[s * nR + r] += fn; }
       }
-      const h = H[j], p = H[j - 1];
-      let e = 0, out = 0;
-      if (h && !p){ if (nova === r){ e = Q[j]; o.nov[r] += e; } else o.ree[r] += Q[j]; }
-      else if (!h && p){ out = Q[j - 1]; o.sai[r] += out; }
-      else if (h && p){ const d = Q[j] - Q[j - 1]; if (d > 0){ e = d; o.aum[r] += d; o.ligAum[r]++; } else if (d < 0){ out = -d; o.red[r] += out; } }
-      if (e){ eOrig[r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e; if (r === D.ligMes[m]){ o.lig[r]++; if (D.nova[m]) o.ligNova[r]++; } }
+      const e = D.ent[j], mv = D.mv[j];
+      let out = 0;
+      if (e){
+        o.ent[r] += e; o.eC[D.cat[j]][r] += e; o.cidE[c * nR + r] += e; o.subE[s * nR + r] += e;
+        if (mv === 2){ o.aum[r] += e; o.ligAum[r]++; }
+        if (r === D.ligMes[m]){ o.lig[r]++; o.ligC[D.ligCat[m]][r]++; }
+      }
+      if (mv === 3) o.ree[r] += Q[j];
+      else if (mv === 6) o.ree[r] += Q[j] - Q[j - 1];
+      else if (mv === 4){ out = Q[j - 1]; o.sai[r] += out; }
+      else if (mv === 5){ out = Q[j - 1] - Q[j]; o.red[r] += out; }
       if (out){ o.cidS[c] += out; o.subS[s] += out; }
     }
   }
+  // atalhos com os nomes de antes: já existiam na base (2), novas na base (1), aumentos (3, só na regra 'teto')
+  o.eBase = o.eC[2]; o.eNova = o.eC[1]; o.eAum = o.eC[3]; o.ligNova = o.ligC[1];
   return o;
 }
 
@@ -1153,7 +1178,22 @@ function renderResumo(){
   const k = keepMask(), nR = D.refs.length, L = nR - 1, labels = D.refs.map(refLabel);
   const first = labels[0], last = labels[L];
   const o = fluxos(k);
-  const ent = r => o.nov[r] + o.aum[r];
+  const ent = r => o.ent[r];
+  // grupos das economias novas: no esgoto, pela origem da matrícula; na água (regra 'teto'), novas na base, recuperadas
+  // da base de dez/25 e aumentos acima do teto
+  const teto = SV().regra === 'teto';
+  const GR = teto ? [
+    { k: 1, eco: 'Economias novas na base', mat: 'Matrículas novas na base', curto: 'novas na base', curtoMat: 'novas na base', cor: '#176b9c', css: 'var(--azul)', txt: '#fff' },
+    { k: 2, eco: 'Economias recuperadas da base de dez/25', mat: 'Matrículas recuperadas da base de dez/25', curto: 'recuperadas de dez/25', curtoMat: 'recuperadas de dez/25', cor: '#102840', css: 'var(--marinho)', txt: '#fff' },
+    { k: 3, eco: 'Aumentos de economias', mat: 'Matrículas com aumento de economias', curto: 'de aumentos', curtoMat: 'com aumento', cor: '#8fb3d1', css: '#8fb3d1', txt: '#102840' }
+  ] : [
+    { k: 2, eco: 'Economias que já existiam na base', mat: 'Matrículas que já existiam na base', curto: 'já existiam na base', cor: '#102840', css: 'var(--marinho)', txt: '#fff' },
+    { k: 1, eco: 'Economias novas faturando em 2026', mat: 'Matrículas novas faturando em 2026', curto: 'novas faturando', cor: '#176b9c', css: 'var(--azul)', txt: '#fff' }
+  ];
+  $('#legEco').innerHTML = GR.map(g => `<span><i style="background:${g.css}"></i>${g.eco}</span>`).join('');
+  $('#notaEco').textContent = teto
+    ? 'Economias que passaram a faturar água em 2026: das matrículas novas na base (que não estavam na base em dez/25), das que estavam na base em dez/25 sem faturar e foram recuperadas (cada uma conta uma vez) e os aumentos de economias. Cada matrícula tem como teto o maior número de economias já faturado (o de dez/25 para quem já faturava): só soma o que passar dele, então quem é cortado e religado não soma de novo. As que deixaram de faturar não são descontadas.'
+    : 'Economias que passaram a faturar esgoto em 2026, separadas entre as que já existiam na base (passaram a ter economias de esgoto faturadas ou faturaram mais economias de esgoto) e as novas faturando de matrículas que entraram na base em 2026 já faturando esgoto. As que deixaram de faturar não são descontadas.';
   let total = 0, best = 1;
   for (let r = 1; r < nR; r++){ total += ent(r); if (ent(r) > ent(best)) best = r; }
   const ligAno = sumFrom1(o.lig);
@@ -1164,7 +1204,7 @@ function renderResumo(){
 
   $('#kpis').innerHTML = [
     { t: 'Economias novas faturando esgoto em 2026', v: mais(total), d: `${labels[1]} a ${last}`, c: 'destaque' },
-    { t: 'Matrículas novas faturando esgoto em 2026', v: mais(ligAno), d: 'já existiam na base ou novas', c: 'destaque' },
+    { t: 'Matrículas novas faturando esgoto em 2026', v: mais(ligAno), d: teto ? 'novas, recuperadas ou com aumento' : 'já existiam na base ou novas', c: 'destaque' },
     { t: 'Média por mês', v: mais(L ? Math.round(total / L) : 0), d: `economias, em ${L} meses` },
     { t: 'Melhor mês', v: total ? `${labels[best]}: ${mais(ent(best))}` : '–', d: 'maior entrada de economias' },
     { t: `Fat. esgoto das economias novas faturando em ${last}`, v: brl0.format(o.fatNovas[L]), d: `${nf1.format(part)}% do total de esgoto` },
@@ -1178,13 +1218,10 @@ function renderResumo(){
   const L1 = labels.slice(1), sl = a => L1.map((_, i) => a[i + 1]);
   const entA = L1.map((_, i) => ent(i + 1));
   let acc = 0, accL = 0; const accA = entA.map(v => (acc += v));
-  $('#blocoEco').innerHTML = graficoAlinhado(L1, [
-    { nome: 'Economias que já existiam na base', values: sl(o.eBase), cor: '#102840', corTexto: '#fff' },
-    { nome: 'Economias novas faturando em 2026', values: sl(o.eNova), cor: '#176b9c', corTexto: '#fff' }
-  ], { fmt: mais, fmtIn: v => nf0.format(v), aria: 'Economias novas faturando esgoto por mês' }) +
+  $('#blocoEco').innerHTML = graficoAlinhado(L1, GR.map(g => ({ nome: g.eco, values: sl(o.eC[g.k]), cor: g.cor, corTexto: g.txt })),
+    { fmt: mais, fmtIn: v => nf0.format(v), aria: 'Economias novas faturando esgoto por mês' }) +
   tabelaAlinhada(L1, [
-    { nome: 'Economias que já existiam na base', cor: 'var(--marinho)', vals: sl(o.eBase), fmt: v => nf0.format(v) },
-    { nome: 'Economias novas faturando em 2026', cor: 'var(--azul)', vals: sl(o.eNova), fmt: v => nf0.format(v) },
+    ...GR.map(g => ({ nome: g.eco, cor: g.css, vals: sl(o.eC[g.k]), fmt: v => nf0.format(v) })),
     { nome: 'Total de economias no mês', cls: 'forte', vals: entA, fmt: mais },
     { nome: 'Acumulado em 2026', vals: accA, fmt: v => nf0.format(v) },
     { nome: 'Total de matrículas no mês', cls: 'forte', vals: sl(o.lig), fmt: mais },
@@ -1199,19 +1236,23 @@ function renderResumo(){
   const ltCol = (cls, mes, topo, extra) => `<div class="lt-col ${cls}"><div class="lt-marco"><i></i></div>` +
     `<div class="lt-topo"><p class="lt-mes">${mes}</p>${topo}</div><div>${extra ? '<div class="lt-sep"></div>' + extra : ''}</div></div>`;
   const ltVal = (v, rot, det) => `<p class="lt-val">${v}</p><p class="lt-rot">${rot}</p>${det ? `<p class="lt-det">${det}</p>` : ''}`;
-  const ltParte = (ex, nv, oque) => `${nf0.format(ex)} já existiam na base<br>${nf0.format(nv)} ${oque} novas faturando`;
+  // divisão por grupo na linha do tempo: "258 já existiam na base / 0 economias novas faturando" (esgoto) ou os três grupos (água)
+  const ltParte = (arr, oque, r) => GR.map(g => {
+    const v = r == null ? sumFrom1(arr[g.k]) : arr[g.k][r];
+    return teto ? `${nf0.format(v)} ${oque === 'matrículas' ? g.curtoMat : g.curto}` : g.k === 2 ? `${nf0.format(v)} já existiam na base` : `${nf0.format(v)} ${oque} novas faturando`;
+  }).join('<br>');
   const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
   const LT = {
-    eco: { nota: 'Economias novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as economias novas faturando em 2026. No fim, o total do ano.',
+    eco: { nota: teto ? 'Economias novas faturando água em cada mês, separadas em novas na base, recuperadas da base de dez/25 e aumentos de economias (só o que passa do maior número já faturado pela matrícula). No fim, o total do ano.' : 'Economias novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as economias novas faturando em 2026. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ecoTot[0]), 'economias faturando esgoto na base'),
-      mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eBase[r], o.eNova[r], 'economias')),
+      mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eC, 'economias', r)),
       extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
-      tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(sumFrom1(o.eBase), sumFrom1(o.eNova), 'economias')),
+      tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(o.eC, 'economias')),
       totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
-    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as matrículas novas faturando em 2026. Cada matrícula conta uma vez, no primeiro mês em que passa a faturar economias de esgoto. No fim, o total do ano.',
+    mat: { nota: teto ? 'Matrículas novas faturando água em cada mês, separadas em novas na base, recuperadas da base de dez/25 e com aumento de economias. Cada matrícula conta uma vez, no primeiro mês em que soma economias. No fim, o total do ano.' : 'Matrículas novas faturando esgoto em cada mês, separadas entre as que já existiam na base e as matrículas novas faturando em 2026. Cada matrícula conta uma vez, no primeiro mês em que passa a faturar economias de esgoto. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
-      mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.lig[r] - o.ligNova[r], o.ligNova[r], 'matrículas')),
-      tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(ligAno - sumFrom1(o.ligNova), sumFrom1(o.ligNova), 'matrículas')) },
+      mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas', r)),
+      tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas')) },
     fat: { nota: 'Faturamento de esgoto das economias novas faturando em cada mês e o faturamento de esgoto total do mês. No fim, a soma do ano.',
       base: () => ltVal(brl0.format(o.fatTot[0]), 'faturamento de esgoto do mês'),
       mes: r => ltVal(brl0.format(o.fatNovas[r]), 'das economias novas faturando', fatPart(r)),
@@ -1227,14 +1268,12 @@ function renderResumo(){
   const saiA = L1.map((_, i) => o.sai[i + 1] + o.red[i + 1]);
   let accL2 = 0; const ligAcc = L1.map((_, i) => (accL2 += o.lig[i + 1]));
   $('#blocoEco').dica = { n: L1.length, titulo: i => L1[i], linhas: i => [
-    { nome: 'Economias que já existiam na base', valor: nf0.format(o.eBase[i + 1]), cor: '#102840' },
-    { nome: 'Economias novas faturando em 2026', valor: nf0.format(o.eNova[i + 1]), cor: '#176b9c' },
+    ...GR.map(g => ({ nome: g.eco, valor: nf0.format(o.eC[g.k][i + 1]), cor: g.cor })),
     { nome: 'Total de economias no mês', valor: mais(entA[i]), cls: 'forte' },
     { nome: 'Acumulado em 2026', valor: nf0.format(accA[i]) },
-    { nome: 'Das quais, economias a mais onde já se faturava esgoto', valor: nf0.format(o.aum[i + 1]), cls: 'mudo' }, 'sep',
+    ...(teto ? [] : [{ nome: 'Das quais, economias a mais onde já se faturava esgoto', valor: nf0.format(o.aum[i + 1]), cls: 'mudo' }]), 'sep',
     { nome: 'Total de matrículas no mês', valor: mais(o.lig[i + 1]), cls: 'forte' },
-    { nome: 'Matrículas que já existiam na base', valor: nf0.format(o.lig[i + 1] - o.ligNova[i + 1]) },
-    { nome: 'Matrículas novas faturando em 2026', valor: nf0.format(o.ligNova[i + 1]) },
+    ...GR.map(g => ({ nome: g.mat, valor: nf0.format(o.ligC[g.k][i + 1]) })),
     { nome: 'Matrículas acumuladas em 2026', valor: nf0.format(ligAcc[i]) }, 'sep',
     { nome: 'Economias que deixaram de faturar (só para conhecimento)', valor: nf0.format(saiA[i]), cls: 'neg' },
     { nome: 'Economias que voltaram a faturar (não somadas)', valor: nf0.format(o.ree[i + 1]), cls: 'mudo' }
@@ -1577,6 +1616,11 @@ async function exportTodas(){
   baixa(parts, `analitico_todas_economias_${SV().arq}_${mes >= 0 ? D.refs[mes] : 'todos_os_meses'}.csv`);
   toast(`Analítico com ${nf0.format(linhas)} linhas.` + (linhas > 1048575 ? ' Passa do limite de linhas do Excel: escolha um mês só para abrir no Excel.' : ''));
 }
+const MOVS = ['', 'Passou a faturar esgoto', 'Passou a faturar mais economias', 'Voltou a faturar esgoto', 'Deixou de faturar esgoto',
+  'Passou a faturar menos economias', 'Voltou a economias que já tinha'];
+const grupoNome = c => SV().regra === 'teto'
+  ? ['', 'Novas na base', 'Recuperadas da base de dez/25', 'Aumentos de economias'][c]
+  : ['', 'Novas faturando em 2026', 'Já existiam na base'][c] || '';
 async function exportAnalitico(){
   const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
   const r0 = mes > 0 ? mes : 1, r1 = mes > 0 ? mes : nR - 1;
@@ -1584,7 +1628,7 @@ async function exportAnalitico(){
   bloqueia(true); prog(true, 'Gerando o analítico', mes > 0 ? labels[mes] : 'todos os meses', 0);
   const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'TIPO_FATURAMENTO_ATUAL',
-    'ORIGEM', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'].map(HC);
+    'ORIGEM', 'MOVIMENTO', 'SOMA_NO_TOTAL', 'GRUPO', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES', 'ECONOMIAS_CONTADAS', 'CONTA_COMO_MATRICULA', 'ECO_TOTAL_MES', 'FAT_ESGOTO_MES', 'LISTAS_VIRAR'].map(HC);
   const parts = ['\ufeff' + head.join(';') + '\r\n'];
   let n = 0, soma = 0;
   // ordem: mês e, dentro do mês, matrícula
@@ -1595,14 +1639,12 @@ async function exportAnalitico(){
       const b = m * nR, L = nR - 1;
       {
         const j = b + r, h = H[j], p = H[j - 1];
-        let mov = '', conta = 0, soma1 = false;
-        if (h && !p){ if (D.entra[m] === r){ mov = 'Passou a faturar esgoto'; conta = Q[j]; soma1 = true; } else mov = 'Voltou a faturar esgoto'; }
-        else if (!h && p) mov = 'Deixou de faturar esgoto';
-        else if (h && p && Q[j] !== Q[j - 1]){ if (Q[j] > Q[j - 1]){ mov = 'Passou a faturar mais economias'; conta = Q[j] - Q[j - 1]; soma1 = true; } else mov = 'Passou a faturar menos economias'; }
+        // movimento e economias contadas vêm de derive() (mesma regra do Resumo)
+        const mov = MOVS[D.mv[j]], conta = D.ent[j], soma1 = conta > 0;
         if (!mov) continue;
         const ant = D.present[j - 1] ? Q[j - 1] : '', at = D.present[j] ? Q[j] : '';
         chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-          D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', T(mov), soma1 ? 'SIM' : 'NÃO', ant, at,
+          D.pri[m] >= 0 ? labels[D.pri[m]] : '', D.dict.tipo[D.tipo[b + L]] || '', D.nova[m] ? 'Nova na base' : 'Já existia na base', T(mov), soma1 ? 'SIM' : 'NÃO', soma1 ? grupoNome(D.cat[j]) : '', ant, at,
           soma1 ? conta : '', D.ligMes[m] === r ? 'SIM' : 'NÃO', D.present[j] ? D.et[j] : '', D.present[j] ? nf2.format(D.F[j]) : '', listasDe(m)].map(q).join(';') + '\r\n';
         n++; if (soma1) soma += conta;
       }

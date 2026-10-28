@@ -1,6 +1,8 @@
 """Recalcula em Python, de forma independente, os números do Resumo do painel.
 Uso: python tests/conferir_totais.py [--agua] base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
---agua: confere o painel Água, com Qtd_eco_fat_agua e Faturamento_bruto_direta_agua no lugar das colunas de esgoto.
+--agua: confere o painel Água, com Qtd_eco_fat_agua e Faturamento_bruto_direta_agua no lugar das colunas de esgoto
+e a regra do teto: cada matrícula só soma economias acima do maior número já faturado (o de dez/25 para quem já
+faturava); grupos: novas na base (não estavam na base em dez/25), recuperadas da base de dez/25 e aumentos.
 As listas "Virar" (opcionais) são comparadas pelo primeiro mês em que cada matrícula aparece faturando esgoto.
 Compare a saída com os indicadores e as tabelas do painel (mesmas regras do index.html)."""
 import sys, collections
@@ -41,6 +43,9 @@ base_eco = sum(Q[m][k0] for m in T if T[m].get(k0))
 z = lambda: [0.0] * n
 nov, aum, sai, red, ree, fat_tot, fat_novas = z(), z(), z(), z(), z(), z(), z()
 e_base, e_nova, lig, lig_nova, lig_aum = z(), z(), z(), z(), z()
+grupo, lig_t, tot_t, ree_t = {1: z(), 2: z(), 3: z()}, {1: z(), 2: z(), 3: z()}, z(), z()
+prio_m = collections.defaultdict(set)
+for (mm, kk) in prio: prio_m[mm].add(kk)
 for m in T:
     h = [T[m].get(k, False) for k in refs]; q = [Q[m].get(k, 0) for k in refs]; f = [F[m].get(k, 0) for k in refs]
     entra = -1
@@ -52,6 +57,17 @@ for m in T:
     nova = entra > 0 and entra == prim
     e_orig = e_nova if nova else e_base
     ligou = False  # a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
+    if AGUA:
+        # regra do teto (painel Água): entradas e aumentos só acima do maior número de economias já faturado
+        nova_a = k0 not in prio_m.get(m, ()) and entra > 0
+        teto = q[0] if h[0] else 0; ligou = False
+        for r in range(1, n):
+            if h[r] and q[r] > teto:
+                e = q[r] - teto; g = (1 if nova_a else 2) if teto == 0 else 3
+                grupo[g][r] += e; tot_t[r] += e; teto = q[r]
+                if not ligou: ligou = True; lig_t[g][r] += 1
+            elif h[r] and not h[r - 1]: ree_t[r] += q[r]
+            elif h[r] and h[r - 1] and q[r] > q[r - 1]: ree_t[r] += q[r] - q[r - 1]
     for r in range(n):
         fat_tot[r] += f[r]
         if r == 0: continue
@@ -82,6 +98,13 @@ print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_b
 print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já na base {sum(lig)-sum(lig_nova):,.0f} + matrículas novas {sum(lig_nova):,.0f})')
 print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{rot[r]} {lig_aum[r]:.0f}' for r in range(1, n)))
 print('Por mês, economias acrescentadas nelas:', ' '.join(f'{rot[r]} {aum[r]:.0f}' for r in range(1, n)))
+if AGUA:
+    print('Regra do teto (painel Água), por mês:')
+    print('mês      novas_base  recuperadas  aumentos   total  matrículas  voltaram')
+    for r in range(1, n):
+        print(f'{rot[r]:7} {grupo[1][r]:11.0f} {grupo[2][r]:12.0f} {grupo[3][r]:9.0f} {tot_t[r]:7.0f} {lig_t[1][r]+lig_t[2][r]+lig_t[3][r]:11.0f} {ree_t[r]:9.0f}')
+    print(f'Economias novas faturando (teto): {sum(tot_t):,.0f}  (novas na base {sum(grupo[1]):,.0f} + recuperadas {sum(grupo[2]):,.0f} + aumentos {sum(grupo[3]):,.0f})')
+    print(f'Matrículas novas faturando (teto): {sum(map(sum, lig_t.values())):,.0f}  (novas na base {sum(lig_t[1]):,.0f} + recuperadas {sum(lig_t[2]):,.0f} + com aumento {sum(lig_t[3]):,.0f})   Voltaram (não somam): {sum(ree_t):,.0f}')
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
 
 # comparativo com as listas "Virar para Água e Esgoto": mês previsto pelo nome do arquivo
