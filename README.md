@@ -13,6 +13,15 @@ Painel em HTML que consolida as bases mensais de faturamento (exportadas em .xls
 
 Conecte a pasta que tem as subpastas **Esgoto** e **Água**. A base de esgoto (e as listas "Virar") fica em Esgoto; a base de água, em Água. Os arquivos da subpasta Água não entram na base de esgoto: viram a base do painel Água, que mostra as economias a mais de água em 2026 (novas entradas e aumentos de economias), com as mesmas regras e telas do painel de esgoto, usando Qtd_eco_fat_agua e Faturamento_bruto_direta_agua.
 
+A terceira subpasta, **Faturamento**, recebe os mesmos arquivos do painel de faturamento: a fatura e um arquivo de consumo por mês, com o mês no nome (ex.: "Consumo 12-2025.csv"), em .csv ou .xlsx. Eles abrem na aba **Arquivos do faturamento** (com os painéis Esgoto e Água), que faz as mesmas contas da base do estudo e traz o cartão "Comparação com a base do estudo", mês a mês.
+
+```
+Nova pasta/
+  Esgoto/        base de esgoto e listas "Virar"
+  Água/          base de água
+  Faturamento/   Fatura.csv, Consumo 12-2025.csv, Consumo 01-2026.csv, … Consumo 12-2026.csv
+```
+
 ## Listas de comparação
 
 Planilhas com "Virar" no nome (por exemplo, "Julho - Virar para Água e Esgoto.xlsx") são tratadas como listas das matrículas que deveriam passar a faturar esgoto no mês do nome. Coloque-as na mesma pasta da base. Elas não entram nos totais: o painel só compara, no cartão "Comparativo com as listas de virar para Água e Esgoto", em que mês cada matrícula começou a faturar esgoto.
