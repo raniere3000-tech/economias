@@ -28,7 +28,7 @@ COL_F = 'Faturamento_bruto_direta_agua' if AGUA else 'Faturamento_bruto_direta_e
 arq = sys.argv[1] if len(sys.argv) > 1 else 'base_teste.xlsx'
 wb = load_workbook(arq, read_only=True)
 T, Q, F, E, QA = (collections.defaultdict(dict) for _ in range(5))
-refs = set(); prio = {}; repetidas = 0
+refs = set(); prio = {}; repetidas = 0; multi = set()
 for ws in wb.worksheets:
     cab = None
     for row in ws.iter_rows(values_only=True):
@@ -37,19 +37,19 @@ for ws in wb.worksheets:
                 cab = {str(c).strip(): i for i, c in enumerate(row) if c}
             continue
         g = lambda nome: row[cab[nome]]
-        # todos os contratos entram; uma linha por matrícula e mês: a do último contrato (SIM), depois a de mais
-        # economias de esgoto, e no empate a última lida
+        # todos os contratos entram; com mais de um contrato da matrícula no mesmo mês (v1.29): economias = o maior
+        # número entre os contratos, faturamento = soma dos contratos
         d = g('Referência'); k = (d.year, d.month); refs.add(k); m = g('NUM_LIGACAO')
-        p = (str(g('ULTIMO_CONTRATO') or '').strip().upper() == 'SIM', int(g(COL_Q) or 0))
         if (m, k) in prio:
-            repetidas += 1
-            if p < prio[(m, k)]: continue
-        prio[(m, k)] = p
-        Q[m][k] = int(g(COL_Q) or 0)
+            repetidas += 1; multi.add((m, k))
+        else:
+            Q[m][k] = E[m][k] = QA[m][k] = 0; F[m][k] = 0.0
+        prio[(m, k)] = 1
+        Q[m][k] = max(Q[m][k], int(g(COL_Q) or 0))
         T[m][k] = Q[m][k] > 0  # faturando esgoto no mês; o TIPO_FATURAMENTO é o atual e não entra na conta
-        F[m][k] = float(g(COL_F) or 0)
-        E[m][k] = int(g('Eco_total') or 0)
-        QA[m][k] = int(g('Qtd_eco_fat_agua') or 0)
+        F[m][k] += float(g(COL_F) or 0)
+        E[m][k] = max(E[m][k], int(g('Eco_total') or 0))
+        QA[m][k] = max(QA[m][k], int(g('Qtd_eco_fat_agua') or 0))
 refs = sorted(refs); n = len(refs)
 k0 = refs[0]
 base_mat = sum(1 for m in T if T[m].get(k0))
@@ -117,7 +117,7 @@ rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","de
 print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
 for r in range(n):
     print(f'{rot[r]:7} {e_base[r]:8.0f} {e_nova[r]:10.0f} {nov[r]+aum[r]:6.0f} {lig[r]:9.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')
-print(f'Linhas repetidas da mesma matrícula no mesmo mês, descartadas: {repetidas:,.0f}')
+print(f'Meses de matrícula com mais de um contrato: {len(multi):,.0f} ({repetidas:,.0f} linhas a mais; economias = maior, faturamento = soma)')
 print(f'Base em {rot[0]}: {base_mat:,.0f} matrículas e {base_eco:,.0f} economias faturando esgoto (economias de esgoto faturadas > 0)')
 print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_base):,.0f} + matrículas novas {sum(e_nova):,.0f})')
 print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já na base {sum(lig)-sum(lig_nova):,.0f} + matrículas novas {sum(lig_nova):,.0f})')

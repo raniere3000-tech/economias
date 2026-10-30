@@ -254,7 +254,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.28</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.29</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -671,21 +671,38 @@ class Store {
     const present = new Uint8Array(N), grp = new Int32Array(N).fill(-1), tipo = new Uint16Array(N);
     const fa = new Float64Array(N), fe = new Float64Array(N), qa = new Int32Array(N), qe = new Int32Array(N), et = new Int32Array(N), ult = new Uint8Array(N);
     const n = this.rMat.n, A = this.rMat.a, R = this.rRef.a, U = this.rUlt.a, QE = servico === 'agua' ? this.rQa.a : this.rQe.a;
+    // Mais de um contrato da mesma matrícula no mesmo mês (troca de titularidade, v1.29): fatura no mês se qualquer
+    // contrato faturou; economias = o maior número entre os contratos (não duplica); faturamento = soma dos contratos.
+    // Grupo e tipo vêm da linha do último contrato (SIM); entre contratos iguais, a de mais economias do serviço.
+    // sel guarda essa linha, que era a única usada até a v1.28: os meses com mais de um contrato saem em mJ com os
+    // valores da regra antiga, para a comparação antes/depois da aba Dados
+    const sel = new Int32Array(N).fill(-1), nC = new Uint8Array(N), bits = new Uint8Array(N);
     for (let i = 0; i < n; i++){
-      const j = A[i] * nR + remap[R[i]];
-      // uma linha por matrícula e mês: vale a do último contrato; entre contratos iguais, a de mais economias do serviço
-      if (present[j]){
-        this.stats.repetidas++;
-        if (U[i] < ult[j] || (U[i] === ult[j] && QE[i] < (servico === 'agua' ? qa[j] : qe[j]))) continue;
+      const j = A[i] * nR + remap[R[i]], s = sel[j];
+      bits[j] |= U[i] ? 1 : 2;
+      if (s < 0){
+        sel[j] = i; present[j] = 1; nC[j] = 1; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i];
+        fa[j] = this.rFa.a[i]; fe[j] = this.rFe.a[i]; qa[j] = this.rQa.a[i]; qe[j] = this.rQe.a[i]; et[j] = this.rEt.a[i];
+        continue;
       }
-      present[j] = 1; ult[j] = U[i]; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i];
-      fa[j] = this.rFa.a[i]; fe[j] = this.rFe.a[i]; qa[j] = this.rQa.a[i]; qe[j] = this.rQe.a[i]; et[j] = this.rEt.a[i];
+      this.stats.repetidas++; if (nC[j] < 255) nC[j]++;
+      fa[j] += this.rFa.a[i]; fe[j] += this.rFe.a[i];
+      if (this.rQa.a[i] > qa[j]) qa[j] = this.rQa.a[i];
+      if (this.rQe.a[i] > qe[j]) qe[j] = this.rQe.a[i];
+      if (this.rEt.a[i] > et[j]) et[j] = this.rEt.a[i];
+      if (!(U[i] < U[s] || (U[i] === U[s] && QE[i] < QE[s]))){ sel[j] = i; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i]; }
     }
+    const mJ = [];
+    for (let j = 0; j < N; j++){ if (bits[j]) ult[j] = bits[j] === 1 ? 1 : bits[j] === 2 ? 0 : 2; if (nC[j] > 1) mJ.push(j); }
+    const m = mJ.length, mQa = new Int32Array(m), mQe = new Int32Array(m), mFa = new Float64Array(m), mFe = new Float64Array(m), mN = new Uint8Array(m);
+    mJ.forEach((j, x) => { const s = sel[j]; mQa[x] = this.rQa.a[s]; mQe[x] = this.rQe.a[s]; mFa[x] = this.rFa.a[s]; mFe[x] = this.rFe.a[s]; mN[x] = nC[j]; });
+    this.stats.multi = m;
+    const multi = { j: Int32Array.from(mJ), qa: mQa, qe: mQe, fa: mFa, fe: mFe, n: mN };
     return {
       refs, mats: this.mats, nomes: this.nomes,
       cid: this.cid.out(), sub: this.sub.out(), sl: this.sl.out(), sc: this.sc.out(),
       dict: { cid: this.d.cid.list, sub: this.d.sub.list, sl: this.d.sl.list, sc: this.d.sc.list, tipo: this.d.tipo.list },
-      present, grp, tipo, fa, fe, qa, qe, et, ult, stats: this.stats
+      present, grp, tipo, fa, fe, qa, qe, et, ult, multi, stats: this.stats
     };
   }
 }
@@ -1053,7 +1070,7 @@ async function processFiles(files, servico){
 self.onmessage = async ev => {
   try {
     const d = await processFiles(ev.data.files, ev.data.servico);
-    const tr = [d.cid, d.sub, d.sl, d.sc, d.present, d.grp, d.tipo, d.fa, d.fe, d.qa, d.qe, d.et, d.ult, d.qaL, d.qeL, d.slTxt, d.eco, d.catE].filter(Boolean).map(a => a.buffer);
+    const tr = [d.cid, d.sub, d.sl, d.sc, d.present, d.grp, d.tipo, d.fa, d.fe, d.qa, d.qe, d.et, d.ult, d.qaL, d.qeL, d.slTxt, d.eco, d.catE, ...(d.multi ? [d.multi.j, d.multi.qa, d.multi.qe, d.multi.fa, d.multi.fe, d.multi.n] : [])].filter(Boolean).map(a => a.buffer);
     self.postMessage({ type: 'done', data: d }, tr);
   } catch (err){
     self.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
@@ -1066,7 +1083,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.28';
+const VERSAO_SITE = '1.29';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1274,6 +1291,7 @@ function usaCad(c){
 // prepara uma base lida: serviço, economias e faturamento do serviço, ordem das matrículas e derivados
 function prepara(d, servico){
   d.servico = servico;
+  d._antes = null;                                   // comparação antes/depois da v1.29, refeita quando preciso
   d.cadI = new Int32Array(d.mats.length).fill(-1);
   if (CAD) d.mats.forEach((s, m) => { const i = CAD.idx.get(s); if (i !== undefined) d.cadI[m] = i; });
   d.Q = servico === 'agua' ? d.qa : d.qe; d.F = servico === 'agua' ? d.fa : d.fe; d.qk = servico === 'agua' ? 'qa' : 'qe';
@@ -1661,7 +1679,9 @@ function renderResumo(){
   const s = D.stats;
   $('#foot').textContent = `Base: ${nf0.format(s.linhas)} linhas em ${s.abas.length} aba(s), de ${D.meta.fonte || 'arquivos'}, com todos os contratos ` +
     `(${nf0.format(s.naoUltimo)} linhas de contratos anteriores, por troca de titularidade). Cada matrícula conta uma vez por mês: ` +
-    `${nf0.format(s.repetidas || 0)} linhas repetidas da mesma matrícula no mesmo mês ficaram de fora, valendo a do último contrato. Economias novas faturando: ${SV().qcol} acima do teto de cada matrícula (o TIPO_FATURAMENTO é o atual e não entra na conta), ` +
+    (D.multi ? `em ${nf0.format(s.multi)} meses de matrícula com mais de um contrato, vale o maior número de economias entre os contratos e a soma do faturamento.`
+      : `${nf0.format(s.repetidas || 0)} linhas repetidas da mesma matrícula no mesmo mês ficaram de fora, valendo a do último contrato (base lida antes da v1.29: clique em ↻ Atualizar para aplicar a regra nova).`) +
+    ` Economias novas faturando: ${SV().qcol} acima do teto de cada matrícula (o TIPO_FATURAMENTO é o atual e não entra na conta), ` +
     `separadas pelo grupo do cruzamento com o cadastro de dez/25${CAD ? '' : ' (cadastro não carregado: recuperadas num grupo só)'}. Matrículas novas faturando: uma vez cada, no primeiro mês em que somam. ` +
     `Economias que voltam a faturar sem passar do teto aparecem só para conhecimento. Todas as regras estão na aba Dados.` +
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
@@ -1855,7 +1875,7 @@ function consList(){
 function cellVal(f, j, forCsv){
   if (!D.present[j]) return '';
   switch (f){
-    case 'ult': return !D.ult || D.ult[j] ? 'SIM' : 'NÃO';
+    case 'ult': return !D.ult ? 'SIM' : ['NÃO', 'SIM', 'SIM + NÃO'][D.ult[j]];
     case 'grp': return D.grp[j] < 0 ? '' : String(D.grp[j]);
     case 'tipo': return D.dict.tipo[D.tipo[j]];
     case 'fa': case 'fe': { const v = D[f][j]; return forCsv ? v.toFixed(2).replace('.', ',') : (v ? nf2.format(v) : ''); }
@@ -2199,6 +2219,61 @@ function showPainel(p, fonte){
   $('#badge').textContent = `Águas do Rio · ${p === 'agua' ? 'Água' : 'Esgoto'}` + (fat ? ' · Faturamento' : '');
   ativa();
 }
+/* ---------- antes e depois da v1.29: mais de um contrato da matrícula no mesmo mês ----------
+   Recalcula a base do painel atual com a regra antiga (só a linha do último contrato) e compara com a regra nova. */
+function antesDepois(){
+  if (!D || !D.multi) return null;
+  if (D._antes) return D._antes;
+  const M = D.multi, o = Object.assign({}, D);
+  o.qa = Int32Array.from(D.qa); o.qe = Int32Array.from(D.qe); o.fa = Float64Array.from(D.fa); o.fe = Float64Array.from(D.fe);
+  M.j.forEach((j, x) => { o.qa[j] = M.qa[x]; o.qe[j] = M.qe[x]; o.fa[j] = M.fa[x]; o.fe[j] = M.fe[x]; });
+  prepara(o, D.servico);
+  const nR = D.refs.length, k = new Uint8Array(D.mats.length).fill(1);
+  const ant = D; D = o; const fo = fluxos(k); D = ant; const fn = fluxos(k);
+  // matrículas afetadas: o mês com mais de um contrato mudou as economias do serviço, o grupo ou as economias novas
+  const afet = new Set();
+  M.j.forEach(j => { if (o.Q[j] !== D.Q[j]) afet.add(Math.floor(j / nR)); });
+  for (let m = 0; m < D.mats.length; m++) if (o.cls[m] !== D.cls[m] || o.ecoNov[m] !== D.ecoNov[m] || o.ligMes[m] !== D.ligMes[m]) afet.add(m);
+  return (D._antes = { o, fo, fn, afet: [...afet].sort((a, b) => a - b) });
+}
+function exportAntesDepois(){
+  const x = antesDepois(); if (!x) return;
+  const { o, afet } = x, nR = D.refs.length, labels = D.refs.map(refLabel), M = D.multi;
+  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const porMat = new Map(); M.j.forEach((j, i) => { const m = Math.floor(j / nR); (porMat.get(m) || porMat.set(m, []).get(m)).push(i); });
+  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO', 'PRIMEIRO_MES_FATURANDO_ESGOTO_ANTES',
+    'MESES_COM_MAIS_DE_UM_CONTRATO', 'MESES_EM_QUE_AS_ECONOMIAS_MUDARAM', 'ECO_ESGOTO_DEZ25', 'ECO_ESGOTO_DEZ25_ANTES', 'ORIGEM', 'ORIGEM_ANTES',
+    'MES_PASSOU_A_FATURAR_ESGOTO', 'MES_PASSOU_A_FATURAR_ESGOTO_ANTES', 'ECONOMIAS_NOVAS_2026', 'ECONOMIAS_NOVAS_2026_ANTES', 'DIFERENCA_ECONOMIAS_NOVAS'].map(HC);
+  const rows = afet.map(m => {
+    const b = m * nR, lst = porMat.get(m) || [];
+    const muda = lst.filter(i => o.Q[M.j[i]] !== D.Q[M.j[i]]).map(i => `${labels[M.j[i] - b]} (${o.Q[M.j[i]]} → ${D.Q[M.j[i]]})`);
+    return [D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
+      D.pri[m] >= 0 ? labels[D.pri[m]] : '', o.pri[m] >= 0 ? labels[o.pri[m]] : '',
+      lst.map(i => `${labels[M.j[i] - b]} (${M.n[i]} contratos)`).join(', '), muda.join(', '),
+      D.present[b] ? D.Q[b] : '', o.present[b] ? o.Q[b] : '', T(CLS_NOME[D.cls[m]]), T(CLS_NOME[o.cls[m]]),
+      D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', o.ligMes[m] > 0 ? labels[o.ligMes[m]] : '', D.ecoNov[m], o.ecoNov[m], D.ecoNov[m] - o.ecoNov[m]].map(q).join(';');
+  });
+  baixa(['\ufeff' + head.join(';') + '\r\n' + rows.join('\r\n') + '\r\n'], `antes_depois_contratos_${ARQ()}.csv`);
+}
+function htmlAntesDepois(){
+  if (!D) return '<p class="nota-secao">Carregue a base para ver a comparação.</p>';
+  if (D.stats && D.stats.fonteFat) return '<p class="nota-secao">Não se aplica aos arquivos do faturamento (não têm contratos). Escolha a Base do estudo.</p>';
+  if (!D.multi) return '<p class="nota-secao"><b>A base guardada no navegador foi lida por uma versão anterior.</b> Clique em ↻ Atualizar para aplicar a regra nova e ver aqui o antes e depois.</p>';
+  const { fo, fn, afet } = antesDepois(), nR = D.refs.length, L1 = D.refs.slice(1).map(refLabel);
+  const ano = a => sumFrom1(a), dif = (a, b) => `<span class="${cls(a - b)}">${signed(a - b, nf0.format)}</span>`;
+  const gs = gruposAtivos();
+  const linhas = [['Economias faturando em dez/25', fo.ecoTot[0], fn.ecoTot[0]], ['Matrículas faturando em dez/25', fo.ligTot[0], fn.ligTot[0]],
+    ['Economias novas faturando em 2026', ano(fo.ent), ano(fn.ent)], ...gs.map(g => ['· ' + GR_NOME[g], ano(fo.eC[g]), ano(fn.eC[g])]),
+    ['Matrículas novas faturando em 2026', ano(fo.lig), ano(fn.lig)], ['Economias que deixaram de faturar', ano(fo.sai) + ano(fo.red), ano(fn.sai) + ano(fn.red)]];
+  return `<p class="nota-secao">Painel ${T('esgoto')} da base do estudo, sem filtros. ${nf0.format(D.multi.j.length)} meses de matrícula têm mais de um contrato; ${nf0.format(afet.length)} matrículas mudam de número, de grupo ou de mês de entrada.</p>` +
+    `<table class="tab-seg"><thead><tr><th>Indicador</th><th>Antes (só o último contrato)</th><th>Agora (v1.29)</th><th>Diferença</th></tr></thead><tbody>` +
+    linhas.map(([t, a, b]) => `<tr><td>${T(t)}</td><td>${nf0.format(a)}</td><td>${nf0.format(b)}</td><td>${dif(b, a)}</td></tr>`).join('') + '</tbody></table>' +
+    `<table class="tab-seg"><thead><tr><th>Economias novas por mês</th>${L1.map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>` +
+    `<tr><td>Antes</td>${L1.map((_, i) => `<td>${nf0.format(fo.ent[i + 1])}</td>`).join('')}</tr>` +
+    `<tr><td>Agora</td>${L1.map((_, i) => `<td>${nf0.format(fn.ent[i + 1])}</td>`).join('')}</tr>` +
+    `<tr><td>Diferença</td>${L1.map((_, i) => `<td>${dif(fn.ent[i + 1], fo.ent[i + 1])}</td>`).join('')}</tr></tbody></table>` +
+    (afet.length ? '<button class="btn-just" type="button" id="btnAntesDepois">⬇ Baixar matrículas afetadas</button>' : '');
+}
 /* ---------- aba Dados: as regras usadas no painel ----------
    Toda mudança de regra ou de cálculo tem de ser escrita aqui também, na mesma versão (pedido do usuário). */
 function renderDados(){
@@ -2219,10 +2294,13 @@ function renderDados(){
   <h2>Arquivos em uso</h2>
   <ul>${arq('Cadastro de dez/25', C)}${arq('Base do estudo · esgoto', DS.esgoto)}${arq('Base do estudo · água', DS.agua)}${arq('Arquivos do faturamento', DS.fat_esgoto || DS.fat_agua)}</ul>
 
+  <h2>Antes e depois da v1.29: mais de um contrato no mesmo mês</h2>
+  ${htmlAntesDepois()}
+
   <h2>1. De onde vêm os dados</h2>
   <ol>
     ${li('<b>Pasta conectada.</b> Subpastas: <b>Esgoto</b> (base do estudo de esgoto e listas “Virar”), <b>Água</b> (base do estudo de água), <b>Faturamento</b> (fatura e consumo do painel de faturamento) e <b>Cadastro</b> (cadastro de dez/25). Arquivos que começam com ~$ são ignorados.')}
-    ${li('<b>Base do estudo.</b> Uma linha por matrícula e mês (Referência), com Qtd_eco_fat_esgoto, Qtd_eco_fat_agua, Faturamento_bruto_direta_esgoto, Faturamento_bruto_direta_agua e Eco_total. Entram todos os contratos da matrícula. Se a mesma matrícula aparece mais de uma vez no mesmo mês, vale a linha do último contrato (ULTIMO_CONTRATO = SIM); entre contratos iguais, a de mais economias do serviço; no empate, a última lida. O TIPO_FATURAMENTO desta base é o tipo de hoje e não entra em nenhuma conta.')}
+    ${li('<b>Base do estudo.</b> Uma linha por matrícula e mês (Referência), com Qtd_eco_fat_esgoto, Qtd_eco_fat_agua, Faturamento_bruto_direta_esgoto, Faturamento_bruto_direta_agua e Eco_total. Entram todos os contratos da matrícula. <b>Mais de um contrato da mesma matrícula no mesmo mês</b> (troca de titularidade, desde a v1.29): a matrícula fatura no mês se qualquer contrato faturou; as economias são o maior número entre os contratos (não duplica) e o faturamento é a soma dos contratos. Nome, situação e grupo de leitura vêm do contrato mais recente (ULTIMO_CONTRATO = SIM); a coluna Último contrato do mês mostra “SIM + NÃO”. <span class=\"ex\">Ex.: em dez/25, contrato encerrado faturou 1 economia e o novo contrato (SIM) veio com 0 → a matrícula faturou 1 em dez/25. Até a v1.28 valia só a linha do último contrato, e ela aparecia sem faturar.</span> O TIPO_FATURAMENTO desta base é o tipo de hoje e não entra em nenhuma conta.')}
     ${li('<b>Arquivos do faturamento.</b> Fatura: só as rubricas VALOR DE AGUA e VALOR DE ESGOTO, no mês da Referencia de Leitura; o faturamento do mês é a soma do Valor Parcela. Consumo: um arquivo por mês, com o mês no nome. Economias da ligação no mês = Residencial + Comercial + Industrial + Pública do consumo, quando o Consumo Faturado é maior que 0 e a fatura tem a rubrica do serviço. Cada ligação conta uma vez por mês (o painel de faturamento soma por linha de fatura; essa conta aparece só na comparação).')}
     ${li('<b>Cadastro de dez/25.</b> Foto de dezembro de 2025, uma linha por matrícula. Economias do cadastro = QTD_ECO_RES + QTD_ECO_COM + QTD_ECO_IND + QTD_ECO_PUB (sem Outros). A situação que vale é a da ligação (SIT_LIG), não a do contrato. O TIPO_FATURAMENTO do cadastro é o de dez/25 e diz se a ligação faturava só água antes.')}
     ${li('<b>Listas “Virar para Água e Esgoto”</b> (só no esgoto): servem só para comparar em que mês cada matrícula começou a faturar. Nunca somam nos totais.')}
@@ -2369,6 +2447,7 @@ $('#tblListas').addEventListener('click', e => {
   $('#cMov').value = 'all'; fillMes(); $('#cLista').value = b.dataset.lista; showTab('cons');
 });
 $('#cLista').onchange = () => renderCons(true);
+$('#dadosRegras').addEventListener('click', e => { if (e.target.closest('#btnAntesDepois') && D) exportAntesDepois(); });
 $('#tblCad').addEventListener('click', e => { const b = e.target.closest('[data-conf]'); if (b && D) exportConf(+b.dataset.conf); });
 ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
 document.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => {
