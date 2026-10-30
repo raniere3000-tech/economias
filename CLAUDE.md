@@ -8,6 +8,7 @@ Contexto para continuar o desenvolvimento no Claude Code. Este arquivo resume tu
 - **Valide os números.** Confira toda mudança de cálculo com `tests/conferir_totais.py`, que recalcula os números em Python de forma independente.
 - **Mantenha um arquivo só.** O painel é um único `index.html`, sem build e sem dependências além das Google Fonts.
 - **Escreva em português do Brasil.** Os textos da interface e os comentários do código ficam em português.
+- **Mantenha a aba Dados em dia (pedido do usuário, 30/10/2026).** Quando as regras com o cadastro estiverem implementadas, o painel ganha uma aba **Dados** com todas as regras enumeradas, explicando em detalhe como cada cálculo é feito e o que é considerado. Toda mudança de regra ou ajuste de cálculo atualiza também a aba Dados, na mesma versão.
 - **Aumente a versão a cada atualização.** A constante `VERSAO_SITE` no `index.html` aparece no cabeçalho (`<span id="versao">`). Suba a versão em toda mudança publicada, para identificar a versão em uso e poder voltar à anterior pelo histórico do Git.
 
 ## Objetivo
@@ -224,6 +225,8 @@ Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês fa
   1. **Novas na base:** fora do cadastro de dez/25 e sem faturar em dez/25; também quem está no cadastro como factível/potencial (sem ligação).
   2. **Recuperadas — inativas/desativadas** e 3. **Recuperadas — cortadas:** no cadastro de dez/25 (pela situação da ligação) sem faturar em dez/25 e que voltam a faturar em 2026. Conta até as economias do cadastro; o que passar entra em aumento (cadastro 2, volta com 5 = 2 recuperadas + 3 aumento).
   4. **Passaram a faturar esgoto** (só no esgoto): no cadastro, faturando água sem esgoto em dez/25, e passam a faturar esgoto.
+  6. **Ativas sem faturar** (terceiro subgrupo das recuperadas): ativa no cadastro de dez/25, sem faturar em dez/25, que passa a faturar em 2026. Mesma conta das recuperadas (até as economias do cadastro; o excedente é aumento).
+  - **Esgoto de quem volta (resposta do usuário):** se antes a matrícula faturava só água e volta faturando água e esgoto, no painel Esgoto entra em **Passaram a faturar esgoto**, não em recuperada. Se já faturava esgoto antes, é recuperada. Para saber o "antes" de quem não faturou em dez/25, o cadastro precisa trazer o tipo de faturamento (ou o serviço de esgoto) da ligação: conferir no cabeçalho quando o arquivo chegar.
   5. **Aumentos:** a partir do **faturado em dez/25** (cadastro 10, faturou 8, vai a 10 = +2), e depois pelo teto (cortada e religada com as mesmas economias não soma de novo).
   - Faturou em dez/25 = já está na base, qualquer que seja a situação no cadastro (cortada no fim do mês conta como já faturando).
   - Fora do cadastro mas faturando em dez/25: conta como já faturando e vai para a lista de inconsistências.
