@@ -220,6 +220,16 @@ Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês fa
 
 ## Pendências e ideias em aberto
 
+- **Regras de entrada com o cadastro de dez/25 (definidas em 30/10/2026, falta implementar):** o usuário vai colocar a base de cadastro de dez/25 numa subpasta **Cadastro** da pasta conectada. As colunas ainda não são conhecidas: esperar o arquivo, analisar o cabeçalho e os valores de situação da ligação antes de programar. Vale para as **duas abas** (base do estudo e arquivos do faturamento), para água e esgoto, com a **regra do teto nos dois** (o esgoto deixa a regra 'mes'). Grupos de entrada (todos somam no total):
+  1. **Novas na base:** fora do cadastro de dez/25 e sem faturar em dez/25; também quem está no cadastro como factível/potencial (sem ligação).
+  2. **Recuperadas — inativas/desativadas** e 3. **Recuperadas — cortadas:** no cadastro de dez/25 (pela situação da ligação) sem faturar em dez/25 e que voltam a faturar em 2026. Conta até as economias do cadastro; o que passar entra em aumento (cadastro 2, volta com 5 = 2 recuperadas + 3 aumento).
+  4. **Passaram a faturar esgoto** (só no esgoto): no cadastro, faturando água sem esgoto em dez/25, e passam a faturar esgoto.
+  5. **Aumentos:** a partir do **faturado em dez/25** (cadastro 10, faturou 8, vai a 10 = +2), e depois pelo teto (cortada e religada com as mesmas economias não soma de novo).
+  - Faturou em dez/25 = já está na base, qualquer que seja a situação no cadastro (cortada no fim do mês conta como já faturando).
+  - Fora do cadastro mas faturando em dez/25: conta como já faturando e vai para a lista de inconsistências.
+  - Economias do cadastro = Residencial + Comercial + Industrial + Pública (sem Outros).
+  - **Conferências** (cartão com quantidades e download): fora do cadastro faturando em dez/25; inativa/desativada no cadastro faturando em dez/25; economias do cadastro diferentes das faturadas em dez/25; ativa no cadastro sem faturar em dez/25.
+
 - **Base real de água:** ainda não chegou (o usuário vai mandar para análise quando tiver). Quando chegar, conferir os números com ele e a dúvida abaixo.
 
 - **Testes automatizados:** ainda não existem testes nem CI de interface. A validação foi feita com Playwright e Chromium sobre a base sintética, comparando com `tests/conferir_totais.py`.
