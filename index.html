@@ -254,7 +254,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.29</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.30</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -1083,7 +1083,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.29';
+const VERSAO_SITE = '1.30';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -2166,6 +2166,7 @@ async function exportEntradas(){
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO',
     'MOTIVO', 'GRUPO', 'ECONOMIAS_ENTRADA', 'CONTA_COMO_MATRICULA', 'MOVIMENTO', 'ECO_ESGOTO_DEZ25', 'TETO_ANTES_DO_MES', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES',
     'ECONOMIAS_CONTADAS_NO_MES', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026'].map(HC);
+  head.push('NA_BASE_DEZ25', 'DIAGNOSTICO_DEZ25', 'COD_GRUPO_DEZ25', 'Qtd_eco_fat_agua_DEZ25', 'Qtd_eco_fat_esgoto_DEZ25', 'Faturamento_bruto_direta_agua_DEZ25', 'Faturamento_bruto_direta_esgoto_DEZ25');
   FIELDS.forEach(f => head.push(f.h + '_MES'));
   head.push(...['ORIGEM', 'SIT_LIG_CADASTRO_DEZ25', 'SIT_CONTRATO_CADASTRO_DEZ25', 'TIPO_FATURAMENTO_CADASTRO_DEZ25', ...CAD_CAT.map(c => c + '_CADASTRO_DEZ25'),
     'ECO_CADASTRO_DEZ25', 'NOM_CLIENTE_CADASTRO', 'CIDADE_CADASTRO', 'SUB_CATEGORIA_CADASTRO', 'LISTAS_VIRAR'].map(HC));
@@ -2180,7 +2181,10 @@ async function exportEntradas(){
       const cad = ci >= 0 ? [C.dict.slTxt[C.slTxt[ci]], C.dict.sc[C.sc[ci]], C.dict.tipo[C.tipo[ci]], ...CAD_CAT.map((_, x) => C.catE ? C.catE[ci * 6 + x] : ''),
         C.eco[ci], C.nomes[ci], C.dict.cid[C.cid[ci]], C.dict.sub[C.sub[ci]]] : [C ? 'Fora do cadastro' : '', ...Array(12).fill('')];
       const comum = [T(MOVS[D.mv[j]]), D.hasE[b] ? Q[b] : 0, Q[j] - e, D.present[j - 1] ? Q[j - 1] : '', Q[j], e,
-        D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', D.ecoNov[m] || '', ...FIELDS.map(f => cellVal(f.k, j, true)), T(CLS_NOME[D.cls[m]]), ...cad, listasDe(m)];
+        D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', D.ecoNov[m] || '',
+        D.present[b] ? 'SIM' : 'NÃO', D.hasE[b] ? 'Faturando em dez/25' : T(DG_NOME[dgDez(m)]), D.present[b] && D.grp[b] >= 0 ? D.grp[b] : '',
+        D.present[b] ? D.qa[b] : '', D.present[b] ? D.qe[b] : '', D.present[b] ? nf2.format(D.fa[b]) : '', D.present[b] ? nf2.format(D.fe[b]) : '',
+        ...FIELDS.map(f => cellVal(f.k, j, true)), T(CLS_NOME[D.cls[m]]), ...cad, listasDe(m)];
       // a parte do grupo e a parte de aumento, cada uma na sua linha
       const pedacos = cat === G_AUM ? [[G_AUM, e]] : eA ? [[cat, e - eA], [G_AUM, eA]] : [[cat, e]];
       pedacos.forEach(([g, v], x) => {
@@ -2274,6 +2278,65 @@ function htmlAntesDepois(){
     `<tr><td>Diferença</td>${L1.map((_, i) => `<td>${dif(fn.ent[i + 1], fo.ent[i + 1])}</td>`).join('')}</tr></tbody></table>` +
     (afet.length ? '<button class="btn-just" type="button" id="btnAntesDepois">⬇ Baixar matrículas afetadas</button>' : '');
 }
+/* ---------- diagnóstico das recuperadas – ativas sem faturar (v1.30, não muda nenhum número) ----------
+   Abre as matrículas que entraram pelo grupo 4 pela situação delas na base do estudo em dez/25. */
+const DG_NOME = ['Ausente da base em dez/25', 'Em dez/25 só com o outro serviço faturado', 'Em dez/25 com valor do serviço, sem economias', 'Em dez/25 com tudo zerado'];
+function dgDez(m){
+  const b = m * D.refs.length, Qo = D.servico === 'agua' ? D.qe : D.qa, Fo = D.servico === 'agua' ? D.fe : D.fa;
+  if (!D.present[b]) return 0;
+  if (D.F[b] > 0) return 2;
+  return Qo[b] > 0 || Fo[b] > 0 ? 1 : 3;
+}
+function diagAtivas(){
+  const nR = D.refs.length, k = keepMask(), out = [];
+  for (let m = 0; m < D.mats.length; m++){
+    if (!k[m] || D.cls[m] !== G_ATIVA || D.ligMes[m] < 0) continue;
+    let eco = 0; for (let r = 1; r < nR; r++){ const j = m * nR + r; if (D.cat[j] === G_ATIVA) eco += D.ent[j] - D.eA[j]; }
+    let meses = 0; for (let r = 1; r < nR; r++) if (D.hasE[m * nR + r]) meses++;
+    const r0 = D.ligMes[m];
+    out.push({ m, dg: dgDez(m), eco, r0, grp: D.grp[m * nR + r0], meses });
+  }
+  return out;
+}
+function htmlDiagAtivas(){
+  if (!D) return '<p class="nota-secao">Carregue a base para ver o diagnóstico.</p>';
+  if (!CAD) return '<p class="nota-secao">Sem o cadastro de dez/25 não existe o grupo “Recuperadas – ativas sem faturar”.</p>';
+  const lst = diagAtivas(), L1 = D.refs.slice(1).map(refLabel), nR = D.refs.length;
+  const tot = lst.reduce((t, x) => t + x.eco, 0);
+  const porDg = DG_NOME.map((_, i) => lst.filter(x => x.dg === i));
+  const pct = v => tot ? nf1.format(v / tot * 100) + '%' : '–';
+  let h = `<p class="nota-secao">Painel ${T('esgoto')} da base ${st.fonte === 'fat' ? 'dos arquivos do faturamento' : 'do estudo'}, com os filtros de cidade e sub-categoria. ${nf0.format(lst.length)} matrículas e ${nf0.format(tot)} economias entraram como “Recuperadas – ativas sem faturar”: SIT_LIG ATIVA no cadastro de dez/25 e sem economias de ${T('esgoto')} faturadas em dez/25 na base. Como a exportação só traz quem teve faturamento no mês, “ausente da base em dez/25” quer dizer que não houve conta da matrícula com Referência dez/25.</p>` +
+    `<table class="tab-seg"><thead><tr><th>Situação na base em dez/25</th><th>Matrículas</th><th>Economias</th><th>% das economias</th></tr></thead><tbody>` +
+    porDg.map((x, i) => { const e = x.reduce((t, y) => t + y.eco, 0); return `<tr><td>${T(DG_NOME[i])}</td><td>${nf0.format(x.length)}</td><td>${nf0.format(e)}</td><td>${pct(e)}</td></tr>`; }).join('') + '</tbody></table>';
+  h += `<table class="tab-seg"><thead><tr><th>Economias por mês de entrada</th>${L1.map(l => `<th>${l}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
+    porDg.map((x, i) => { const v = L1.map((_, r) => x.filter(y => y.r0 === r + 1).reduce((t, y) => t + y.eco, 0)); return `<tr><td>${T(DG_NOME[i])}</td>${v.map(n => `<td>${nf0.format(n)}</td>`).join('')}<td>${nf0.format(v.reduce((a, b) => a + b, 0))}</td></tr>`; }).join('') + '</tbody></table>';
+  // por grupo de leitura (COD_GRUPO do mês de entrada) e por cidade: os 15 maiores
+  const top = (fn, nome) => {
+    const mp = new Map(); lst.forEach(x => { const c = fn(x); const v = mp.get(c) || [0, 0]; v[0]++; v[1] += x.eco; mp.set(c, v); });
+    return `<table class="tab-seg"><thead><tr><th>${nome}</th><th>Matrículas</th><th>Economias</th><th>% das economias</th></tr></thead><tbody>` +
+      [...mp].sort((a, b) => b[1][1] - a[1][1]).slice(0, 15).map(([c, v]) => `<tr><td>${esc(c)}</td><td>${nf0.format(v[0])}</td><td>${nf0.format(v[1])}</td><td>${pct(v[1])}</td></tr>`).join('') + '</tbody></table>';
+  };
+  h += top(x => x.grp < 0 ? '(sem grupo)' : String(x.grp), 'COD_GRUPO no mês de entrada (15 maiores)') + top(x => D.dict.cid[D.cid[x.m]], 'Cidade (15 maiores)');
+  const mesesF = new Map(); lst.forEach(x => mesesF.set(x.meses, (mesesF.get(x.meses) || 0) + 1));
+  h += `<p class="nota-secao">Meses faturando em 2026 (de ${L1.length}): ${[...mesesF].sort((a, b) => a[0] - b[0]).map(([n, c]) => `${n} ${n === 1 ? 'mês' : 'meses'}: ${nf0.format(c)} matrículas`).join(' · ')}.</p>`;
+  return h + (lst.length ? '<button class="btn-just" type="button" id="btnDiagAtivas">⬇ Baixar lista das ativas sem faturar</button>' : '');
+}
+function exportDiagAtivas(){
+  const lst = diagAtivas(), nR = D.refs.length, labels = D.refs.map(refLabel), C = CAD;
+  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', HC('PRIMEIRO_MES_FATURANDO_ESGOTO'), 'DIAGNOSTICO_DEZ25', 'NA_BASE_DEZ25',
+    'COD_GRUPO_DEZ25', 'Qtd_eco_fat_agua_DEZ25', 'Qtd_eco_fat_esgoto_DEZ25', 'Faturamento_bruto_direta_agua_DEZ25', 'Faturamento_bruto_direta_esgoto_DEZ25',
+    HC('MES_PASSOU_A_FATURAR_ESGOTO'), 'COD_GRUPO_NO_MES_DE_ENTRADA', 'ECONOMIAS_RECUPERADAS', HC('ECONOMIAS_NOVAS_2026'), HC('MESES_FATURANDO_ESGOTO_2026'),
+    'SIT_LIG_CADASTRO_DEZ25', 'SIT_CONTRATO_CADASTRO_DEZ25', 'TIPO_FATURAMENTO_CADASTRO_DEZ25', 'ECO_CADASTRO_DEZ25', ...labels.map(l => HC('ECO_ESGOTO_') + l.replace('/', '_').toUpperCase())];
+  const rows = lst.map(x => {
+    const m = x.m, b = m * nR, ci = D.cadI[m], p = D.present[b];
+    return [D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], D.pri[m] >= 0 ? labels[D.pri[m]] : '',
+      T(DG_NOME[x.dg]), p ? 'SIM' : 'NÃO', p && D.grp[b] >= 0 ? D.grp[b] : '', p ? D.qa[b] : '', p ? D.qe[b] : '', p ? nf2.format(D.fa[b]) : '', p ? nf2.format(D.fe[b]) : '',
+      labels[x.r0], x.grp >= 0 ? x.grp : '', x.eco, D.ecoNov[m], x.meses,
+      C.dict.slTxt[C.slTxt[ci]], C.dict.sc[C.sc[ci]], C.dict.tipo[C.tipo[ci]], C.eco[ci], ...labels.map((_, r) => D.present[b + r] ? D.Q[b + r] : '')].map(q).join(';');
+  });
+  baixa(['\ufeff' + head.join(';') + '\r\n' + rows.join('\r\n') + '\r\n'], `diagnostico_ativas_sem_faturar_${ARQ()}.csv`);
+}
 /* ---------- aba Dados: as regras usadas no painel ----------
    Toda mudança de regra ou de cálculo tem de ser escrita aqui também, na mesma versão (pedido do usuário). */
 function renderDados(){
@@ -2293,6 +2356,9 @@ function renderDados(){
 
   <h2>Arquivos em uso</h2>
   <ul>${arq('Cadastro de dez/25', C)}${arq('Base do estudo · esgoto', DS.esgoto)}${arq('Base do estudo · água', DS.agua)}${arq('Arquivos do faturamento', DS.fat_esgoto || DS.fat_agua)}</ul>
+
+  <h2>Diagnóstico: recuperadas – ativas sem faturar</h2>
+  ${htmlDiagAtivas()}
 
   <h2>Antes e depois da v1.29: mais de um contrato no mesmo mês</h2>
   ${htmlAntesDepois()}
@@ -2351,7 +2417,8 @@ function renderDados(){
   <h2>7. Downloads</h2>
   <ol start="26">
     ${li('Todos os arquivos usam ponto e vírgula, vírgula decimal e trazem PRIMEIRO_MES_FATURANDO_ESGOTO logo depois dos dados da matrícula. ORIGEM é o grupo da matrícula pelo cruzamento com o cadastro; SIT_LIG_CADASTRO_DEZ25, TIPO_FATURAMENTO_CADASTRO_DEZ25 e ECO_CADASTRO_DEZ25 vêm do cadastro.')}
-    ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO detalhado pela SIT_LIG do cadastro — Nova na base (fora do cadastro ou Provisória), Recuperada (Inativa), Recuperada (Desativada), Recuperada (Cortada), Recuperada (Corte pedido), Recuperada (Ativa sem faturar), Passou a faturar esgoto ou Aumento de economias — e GRUPO. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
+    ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO detalhado pela SIT_LIG do cadastro — Nova na base (fora do cadastro ou Provisória), Recuperada (Inativa), Recuperada (Desativada), Recuperada (Cortada), Recuperada (Corte pedido), Recuperada (Ativa sem faturar), Passou a faturar esgoto ou Aumento de economias — e GRUPO. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também a situação na base em dez/25 (NA_BASE_DEZ25, DIAGNOSTICO_DEZ25, grupo, economias e R$ de água e esgoto), as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
+    ${li('<b>Diagnóstico das recuperadas – ativas sem faturar</b> (topo desta aba, não muda nenhum número): abre as matrículas do grupo 4 pela situação na base em dez/25 — ausente da base (a exportação só traz quem teve faturamento no mês, então não houve conta com Referência dez/25), só com o outro serviço faturado, com valor do serviço sem economias, ou com tudo zerado — e mostra essas economias por mês de entrada, por COD_GRUPO do mês de entrada, por cidade e pelo número de meses faturando em 2026, com a lista para baixar (economias do serviço mês a mês).')}
     ${li('<b>Analítico de movimentos:</b> com SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS dá as economias novas faturando do Resumo; ECONOMIAS_NO_GRUPO vai para o GRUPO da linha e ECONOMIAS_AUMENTO para os aumentos; CONTA_COMO_MATRICULA = SIM dá as matrículas novas faturando.')}
   </ol>`;
 }
@@ -2447,7 +2514,11 @@ $('#tblListas').addEventListener('click', e => {
   $('#cMov').value = 'all'; fillMes(); $('#cLista').value = b.dataset.lista; showTab('cons');
 });
 $('#cLista').onchange = () => renderCons(true);
-$('#dadosRegras').addEventListener('click', e => { if (e.target.closest('#btnAntesDepois') && D) exportAntesDepois(); });
+$('#dadosRegras').addEventListener('click', e => {
+  if (!D) return;
+  if (e.target.closest('#btnAntesDepois')) exportAntesDepois();
+  if (e.target.closest('#btnDiagAtivas')) exportDiagAtivas();
+});
 $('#tblCad').addEventListener('click', e => { const b = e.target.closest('[data-conf]'); if (b && D) exportConf(+b.dataset.conf); });
 ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
 document.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => {
