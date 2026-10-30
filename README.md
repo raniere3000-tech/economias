@@ -13,12 +13,15 @@ Painel em HTML que consolida as bases mensais de faturamento (exportadas em .xls
 
 Conecte a pasta que tem as subpastas **Esgoto** e **Água**. A base de esgoto (e as listas "Virar") fica em Esgoto; a base de água, em Água. Os arquivos da subpasta Água não entram na base de esgoto: viram a base do painel Água, que mostra as economias a mais de água em 2026 (novas entradas e aumentos de economias), com as mesmas regras e telas do painel de esgoto, usando Qtd_eco_fat_agua e Faturamento_bruto_direta_agua.
 
-A terceira subpasta, **Faturamento**, recebe os mesmos arquivos do painel de faturamento: a fatura e um arquivo de consumo por mês, com o mês no nome (ex.: "Consumo 12-2025.csv"), em .csv ou .xlsx. Eles abrem na aba **Arquivos do faturamento** (com os painéis Esgoto e Água), que faz as mesmas contas da base do estudo e traz o cartão "Comparação com a base do estudo", mês a mês.
+A subpasta **Cadastro** recebe o cadastro de dez/25. Ele define o grupo de cada matrícula que não faturava em dez/25 (novas na base, recuperadas inativas/desativadas, cortadas ou ativas sem faturar e, no esgoto, as que passaram a faturar esgoto) e alimenta o cartão de conferências. As regras completas ficam na aba **Dados** do painel.
+
+A subpasta **Faturamento**, recebe os mesmos arquivos do painel de faturamento: a fatura e um arquivo de consumo por mês, com o mês no nome (ex.: "Consumo 12-2025.csv"), em .csv ou .xlsx. Eles abrem na aba **Arquivos do faturamento** (com os painéis Esgoto e Água), que faz as mesmas contas da base do estudo e traz o cartão "Comparação com a base do estudo", mês a mês.
 
 ```
 Nova pasta/
   Esgoto/        base de esgoto e listas "Virar"
   Água/          base de água
+  Cadastro/      cadastro de dez/25 (Base_Cadastro_Dezembro-2025.xlsx)
   Faturamento/   Fatura.csv, Consumo 12-2025.csv, Consumo 01-2026.csv, … Consumo 12-2026.csv
 ```
 

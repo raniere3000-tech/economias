@@ -1,8 +1,10 @@
 """Recalcula em Python, de forma independente, os números do Resumo do painel.
-Uso: python tests/conferir_totais.py [--agua] base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
---agua: confere o painel Água, com Qtd_eco_fat_agua e Faturamento_bruto_direta_agua no lugar das colunas de esgoto
-e a regra do teto: cada matrícula só soma economias acima do maior número já faturado (o de dez/25 para quem já
-faturava); grupos: novas na base (não estavam na base em dez/25), recuperadas da base de dez/25 e aumentos.
+Uso: python tests/conferir_totais.py [--agua] [--cad cadastro.xlsx] base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
+--agua: confere o painel Água, com Qtd_eco_fat_agua e Faturamento_bruto_direta_agua no lugar das colunas de esgoto.
+--cad: cadastro de dez/25, que define o grupo de quem não faturava em dez/25 (regras 8 a 15 da aba Dados).
+Regra do teto (esgoto e água, v1.26): cada matrícula só soma economias acima do maior número já faturado (o de dez/25
+para quem já faturava); na primeira vez, conta no grupo da matrícula até o limite (economias do cadastro nas recuperadas
+e em "passaram a faturar esgoto") e o resto é aumento.
 As listas "Virar" (opcionais) são comparadas pelo primeiro mês em que cada matrícula aparece faturando esgoto.
 Compare a saída com os indicadores e as tabelas do painel (mesmas regras do index.html)."""
 import sys, collections
@@ -10,11 +12,22 @@ from openpyxl import load_workbook
 
 AGUA = '--agua' in sys.argv
 if AGUA: sys.argv.remove('--agua')
+CAD = {}
+if '--cad' in sys.argv:
+    i = sys.argv.index('--cad'); arq_cad = sys.argv[i + 1]; del sys.argv[i:i + 2]
+    SIT = {'PROVISORIA': 1, 'INATIVA': 2, 'DESATIVADA': 2, 'CORTADA': 3, 'CORTE PEDIDO': 3, 'ATIVA': 4}
+    import unicodedata as _u
+    sem = lambda t: _u.normalize('NFD', str(t or '')).encode('ascii', 'ignore').decode().strip().upper()
+    it = load_workbook(arq_cad, read_only=True).worksheets[0].iter_rows(values_only=True); cc = {c: i for i, c in enumerate(next(it))}
+    for r in it:
+        if r[cc['NUM_LIGACAO']] is None: continue
+        eco = sum(int(r[cc[c]] or 0) for c in ('QTD_ECO_COM', 'QTD_ECO_IND', 'QTD_ECO_PUB', 'QTD_ECO_RES'))
+        CAD[str(r[cc['NUM_LIGACAO']]).split('.')[0]] = (SIT.get(sem(r[cc['SIT_LIG']]), 4), sem(r[cc['TIPO_FATURAMENTO']]), eco, str(r[cc['SIT_LIG']]).strip())
 COL_Q = 'Qtd_eco_fat_agua' if AGUA else 'Qtd_eco_fat_esgoto'
 COL_F = 'Faturamento_bruto_direta_agua' if AGUA else 'Faturamento_bruto_direta_esgoto'
 arq = sys.argv[1] if len(sys.argv) > 1 else 'base_teste.xlsx'
 wb = load_workbook(arq, read_only=True)
-T, Q, F, E = (collections.defaultdict(dict) for _ in range(4))
+T, Q, F, E, QA = (collections.defaultdict(dict) for _ in range(5))
 refs = set(); prio = {}; repetidas = 0
 for ws in wb.worksheets:
     cab = None
@@ -36,6 +49,7 @@ for ws in wb.worksheets:
         T[m][k] = Q[m][k] > 0  # faturando esgoto no mês; o TIPO_FATURAMENTO é o atual e não entra na conta
         F[m][k] = float(g(COL_F) or 0)
         E[m][k] = int(g('Eco_total') or 0)
+        QA[m][k] = int(g('Qtd_eco_fat_agua') or 0)
 refs = sorted(refs); n = len(refs)
 k0 = refs[0]
 base_mat = sum(1 for m in T if T[m].get(k0))
@@ -43,7 +57,8 @@ base_eco = sum(Q[m][k0] for m in T if T[m].get(k0))
 z = lambda: [0.0] * n
 nov, aum, sai, red, ree, fat_tot, fat_novas = z(), z(), z(), z(), z(), z(), z()
 e_base, e_nova, lig, lig_nova, lig_aum = z(), z(), z(), z(), z()
-grupo, lig_t, tot_t, ree_t = {1: z(), 2: z(), 3: z()}, {1: z(), 2: z(), 3: z()}, z(), z()
+grupo, lig_t, tot_t, ree_t = {g: z() for g in range(1, 8)}, {g: z() for g in range(1, 8)}, z(), z()
+gm_cont = collections.Counter()
 prio_m = collections.defaultdict(set)
 for (mm, kk) in prio: prio_m[mm].add(kk)
 for m in T:
@@ -57,17 +72,27 @@ for m in T:
     nova = entra > 0 and entra == prim
     e_orig = e_nova if nova else e_base
     ligou = False  # a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
-    if AGUA:
-        # regra do teto (painel Água): entradas e aumentos só acima do maior número de economias já faturado
-        nova_a = k0 not in prio_m.get(m, ()) and entra > 0
-        teto = q[0] if h[0] else 0; ligou = False
-        for r in range(1, n):
-            if h[r] and q[r] > teto:
-                e = q[r] - teto; g = (1 if nova_a else 2) if teto == 0 else 3
-                grupo[g][r] += e; tot_t[r] += e; teto = q[r]
-                if not ligou: ligou = True; lig_t[g][r] += 1
-            elif h[r] and not h[r - 1]: ree_t[r] += q[r]
-            elif h[r] and h[r - 1] and q[r] > q[r - 1]: ree_t[r] += q[r] - q[r - 1]
+    # grupo da matrícula (0 já faturava em dez/25; 1 nova; 2 inativa/desativada; 3 cortada; 4 ativa; 5 passou a faturar
+    # esgoto; 7 recuperada sem cadastro) e quantas economias contam no grupo na primeira vez (o resto é aumento, 6)
+    c = CAD.get(str(m)); na_dez = k0 in prio_m.get(m, ()); agua0 = na_dez and QA[m].get(k0, 0) > 0
+    inf = float('inf'); lim = inf
+    if h[0]: gm = 0
+    elif not AGUA and (agua0 or (c and c[0] != 1 and c[1] == 'AGUA')): gm = 5; lim = c[2] if c else QA[m][k0]
+    elif c: gm = c[0]; lim = inf if gm == 1 else c[2]
+    elif not CAD and na_dez: gm = 7
+    else: gm = 1
+    gm_cont[gm] += 1
+    teto = q[0] if h[0] else 0; ligou_t = False
+    for r in range(1, n):
+        if h[r] and q[r] > teto:
+            e = q[r] - teto
+            if teto == 0:
+                gp = min(e, lim); grupo[gm if gp > 0 else 6][r] += gp; grupo[6][r] += e - gp; g1 = gm if gp > 0 else 6
+            else: grupo[6][r] += e; g1 = 6
+            tot_t[r] += e; teto = q[r]
+            if not ligou_t: ligou_t = True; lig_t[g1][r] += 1
+        elif h[r] and not h[r - 1]: ree_t[r] += q[r]
+        elif h[r] and h[r - 1] and q[r] > q[r - 1]: ree_t[r] += q[r] - q[r - 1]
     for r in range(n):
         fat_tot[r] += f[r]
         if r == 0: continue
@@ -98,13 +123,22 @@ print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_b
 print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já na base {sum(lig)-sum(lig_nova):,.0f} + matrículas novas {sum(lig_nova):,.0f})')
 print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{rot[r]} {lig_aum[r]:.0f}' for r in range(1, n)))
 print('Por mês, economias acrescentadas nelas:', ' '.join(f'{rot[r]} {aum[r]:.0f}' for r in range(1, n)))
-if AGUA:
-    print('Regra do teto (painel Água), por mês:')
-    print('mês      novas_base  recuperadas  aumentos   total  matrículas  voltaram')
-    for r in range(1, n):
-        print(f'{rot[r]:7} {grupo[1][r]:11.0f} {grupo[2][r]:12.0f} {grupo[3][r]:9.0f} {tot_t[r]:7.0f} {lig_t[1][r]+lig_t[2][r]+lig_t[3][r]:11.0f} {ree_t[r]:9.0f}')
-    print(f'Economias novas faturando (teto): {sum(tot_t):,.0f}  (novas na base {sum(grupo[1]):,.0f} + recuperadas {sum(grupo[2]):,.0f} + aumentos {sum(grupo[3]):,.0f})')
-    print(f'Matrículas novas faturando (teto): {sum(map(sum, lig_t.values())):,.0f}  (novas na base {sum(lig_t[1]):,.0f} + recuperadas {sum(lig_t[2]):,.0f} + com aumento {sum(lig_t[3]):,.0f})   Voltaram (não somam): {sum(ree_t):,.0f}')
+NG = {1: 'novas na base', 2: 'recup. inativas/desativadas', 3: 'recup. cortadas', 4: 'recup. ativas sem faturar', 5: 'passaram a faturar esgoto', 6: 'aumentos', 7: 'recup. de dez/25 (sem cadastro)'}
+gs = [g for g in range(1, 8) if sum(grupo[g]) or sum(lig_t[g])]
+print('Regra do teto, por mês (economias por grupo):')
+print('mês     ' + ''.join(f'{g:>8}' for g in gs) + '   total  matrículas  voltaram')
+for r in range(1, n):
+    print(f'{rot[r]:7} ' + ''.join(f'{grupo[g][r]:8.0f}' for g in gs) + f' {tot_t[r]:7.0f} {sum(lig_t[g][r] for g in gs):11.0f} {ree_t[r]:9.0f}')
+print(f'Economias novas faturando: {sum(tot_t):,.0f}  (' + ' + '.join(f'{NG[g]} {sum(grupo[g]):,.0f}' for g in gs) + ')')
+print(f'Matrículas novas faturando: {sum(map(sum, lig_t.values())):,.0f}  (' + ' + '.join(f'{NG[g]} {sum(lig_t[g]):,.0f}' for g in gs) + f')   Voltaram (não somam): {sum(ree_t):,.0f}')
+print('Matrículas por grupo (todas, com ou sem entrada):', {NG.get(g, 'já faturava em dez/25'): v for g, v in sorted(gm_cont.items())})
+if CAD:
+    fat0 = [m for m in T if T[m].get(k0)]
+    print('Conferências: fora do cadastro faturando', sum(1 for m in fat0 if str(m) not in CAD),
+          '| inativas/desativadas faturando', sum(1 for m in fat0 if str(m) in CAD and CAD[str(m)][0] == 2),
+          '| economias diferentes', sum(1 for m in fat0 if str(m) in CAD and CAD[str(m)][2] != Q[m][k0]),
+          '| ativas sem faturar', sum(1 for mk, v in CAD.items() if v[3] == 'ATIVA' and (AGUA or v[1] == 'AGUA E ESGOTO')
+                                      and not any(T[m].get(k0) for m in T if str(m) == mk)))
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
 
 # comparativo com as listas "Virar para Água e Esgoto": mês previsto pelo nome do arquivo

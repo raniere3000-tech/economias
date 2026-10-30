@@ -36,6 +36,7 @@ CLAUDE.md                   este arquivo
 tests/gerar_base_teste.py   gera base sintética no formato da exportação
 tests/conferir_totais.py    recalcula os números do Resumo em Python para conferência (e o comparativo com listas Virar)
 tests/gerar_lista_teste.py  gera uma lista "Virar para Água e Esgoto" a partir da base sintética
+tests/gerar_cadastro_teste.py  gera um cadastro de dez/25 sintético a partir da base sintética
 tests/conferir_faturamento.py  totais por mês dos arquivos do painel de faturamento (aba Arquivos do faturamento)
 ```
 
@@ -129,6 +130,16 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 - **Cartão "Comparação com a base do estudo"** (`renderCmpFat()`, só nessa aba): por mês, economias faturando, faturamento, economias novas faturando e matrículas faturando, estudo × faturamento, com a diferença, e a linha cinza das economias somadas por linha de fatura (a conta do painel de faturamento). Filtro de cidade vale pelo nome nas duas bases; o de sub-categoria não entra.
 - **Teste:** a pasta sintética do painel de faturamento (`dados_sinteticos.gera_pasta(..., n_ligacoes=600, n_grupos=6, semente=11, mes_atual=(9,2026), formato_fatura='csv', n_meses=10, com_dre=True)`) dá dez/25 500 matrículas e 799 economias, R$ água 84.219 e esgoto 67.375; água (teto) +73 economias (28 novas na base + 45 recuperadas) e +41 matrículas; esgoto +73 e +41. `python tests/conferir_faturamento.py <pasta Faturamento>` mostra os totais por mês (por ligação e por linha) e `--base saida.xlsx` gera a base no formato do estudo para o `conferir_totais.py`.
 
+## Cadastro de dez/25, grupos de entrada e aba Dados (v1.26)
+
+- **Cadastro:** subpasta **Cadastro** da pasta conectada (arquivo real "Base_Cadastro_Dezembro-2025.xlsx", aba Query1, 142.337 matrículas, uma por linha). Colunas: `NUM_LIGACAO, NOM_CLIENTE, CIDADE, SIT_CONTRATO, SIT_LIG, SUB_CATEGORIA, QTD_ECO_COM, QTD_ECO_IND, QTD_ECO_PUB, QTD_ECO_RES, QTD_ECO_OUT, TOTAL_ECO, TIPO_FATURAMENTO`. É foto de dez/25 (SIT_LIG e TIPO_FATURAMENTO de dezembro, confirmado pelo usuário). Lido no worker por `processCad()` (`lerBase(files, 'cad')`), guardado na chave `cad` do IndexedDB e indexado em `CAD` (`usaCad()`, que prepara de novo todas as bases). `prepara()` grava `d.cadI[m]` (índice no cadastro ou -1). Situações reais: ATIVA, INATIVA, DESATIVADA, CORTADA, CORTE PEDIDO, PROVISÓRIA.
+- **Grupos (`D.cls[m]` e `D.cat[j]`; constantes `G_*`, nomes em `GRUPOS`/`GR_NOME`/`CLS_NOME`):** quem faturou em dez/25 já está na base (0), qualquer que seja a situação, inclusive fora do cadastro. Quem não faturou: **1 novas na base** (fora do cadastro ou PROVISÓRIA), **2 recuperadas – inativas/desativadas** (INATIVA, DESATIVADA), **3 recuperadas – cortadas** (CORTADA, CORTE PEDIDO), **4 recuperadas – ativas sem faturar** (ATIVA e situações não previstas, listadas na aba Dados), **5 passaram a faturar esgoto** (só esgoto; vale antes de 2–4: faturava água em dez/25 ou estava no cadastro com tipo AGUA, menos PROVISÓRIA), **6 aumentos**, **7 recuperadas da base de dez/25** (só sem cadastro). Situação pela SIT_LIG, não pela SIT_CONTRATO. Economias do cadastro = COM + IND + PUB + RES (sem OUT).
+- **Contagem (regra do teto nos dois serviços desde a v1.26; o esgoto deixou a regra 'mes'):** teto = economias faturadas em dez/25 (0 se não faturava); só soma o que passar do teto. Na primeira vez, conta no grupo até o limite (`lim`: economias do cadastro nos grupos 2–5; no grupo 5 fora do cadastro, as economias de água de dez/25; sem limite no 1 e no 7) e o resto é aumento (`D.eA[j]`). Aumentos partem do faturado em dez/25, não do cadastro. `fluxos()` soma `ent − eA` no grupo de `cat` e `eA` em aumentos (`o.eC[1..7]`, `o.ligC`). A matrícula conta uma vez, no grupo da primeira entrada (`ligCat`).
+- **Conferências** (cartão "Conferência com o cadastro de dez/25", `conferencias()`/`renderCad()`/`exportConf()`): (a) fora do cadastro faturando em dez/25; (b) inativas/desativadas faturando em dez/25; (c) economias do cadastro ≠ faturadas em dez/25; (d) SIT_LIG ATIVA sem faturar em dez/25 (no esgoto, só tipo AGUA E ESGOTO no cadastro), inclusive fora da base. Listas `conferencia_cadastro_N_<serviço>.csv`.
+- **Downloads:** `ORIGEM` agora é o grupo da matrícula (`CLS_NOME`), seguido de `SIT_LIG_CADASTRO_DEZ25, TIPO_FATURAMENTO_CADASTRO_DEZ25, ECO_CADASTRO_DEZ25` (`CAD_HEAD`, `cadCols()`) nos analíticos e no CSV do Consolidado. O analítico de movimentos ganhou `ECONOMIAS_NO_GRUPO` (vai para o GRUPO da linha) e `ECONOMIAS_AUMENTO` (soma = aumentos do Resumo).
+- **Aba Dados** (subaba ao lado de Resumo e Consolidado, `renderDados()`): todas as regras numeradas (1 a 27), os arquivos em uso e a tabela de situações do cadastro com o grupo de cada uma. **Toda mudança de regra atualiza `renderDados()` na mesma versão.**
+- **Teste:** `python tests/gerar_cadastro_teste.py base_teste.xlsx cad_teste.xlsx` gera um cadastro sintético; `python tests/conferir_totais.py --cad cad_teste.xlsx base_teste.xlsx` (e com `--agua` sobre a base de água de teste) dá os grupos. Esgoto: 2.430 = 295 novas na base + 41 inativas/desativadas + 34 cortadas + 25 ativas sem faturar + 1.952 passaram a faturar esgoto + 83 aumentos; 1.516 matrículas (175, 29, 21, 17, 1.267, 7). Água: 2.430 = 340 + 133 + 106 + 1.768 + 83; 1.516 matrículas (203, 83, 66, 1.157, 7). Conferências no esgoto: 0, 2, 16, 56; na água 0, 2, 16, 2.201.
+
 ## Vocabulário da interface (definido na v1.8)
 
 - **"Novas" é sempre "novas faturando":** as economias e matrículas não são necessariamente novas na base, e sim novas faturando esgoto. Use "economias novas faturando esgoto" e "matrículas novas faturando esgoto", em indicadores, gráficos, linha do tempo e tabelas.
@@ -220,18 +231,6 @@ Uma linha por matrícula. As colunas cadastrais, "Esgoto em 2026" e "1º mês fa
 - Não pediu ranking de cidades, comparação com meta nem destaques automáticos. Pergunte antes de incluir.
 
 ## Pendências e ideias em aberto
-
-- **Regras de entrada com o cadastro de dez/25 (definidas em 30/10/2026, falta implementar):** o usuário vai colocar a base de cadastro de dez/25 numa subpasta **Cadastro** da pasta conectada. As colunas ainda não são conhecidas: esperar o arquivo, analisar o cabeçalho e os valores de situação da ligação antes de programar. Vale para as **duas abas** (base do estudo e arquivos do faturamento), para água e esgoto, com a **regra do teto nos dois** (o esgoto deixa a regra 'mes'). Grupos de entrada (todos somam no total):
-  1. **Novas na base:** fora do cadastro de dez/25 e sem faturar em dez/25; também quem está no cadastro como factível/potencial (sem ligação).
-  2. **Recuperadas — inativas/desativadas** e 3. **Recuperadas — cortadas:** no cadastro de dez/25 (pela situação da ligação) sem faturar em dez/25 e que voltam a faturar em 2026. Conta até as economias do cadastro; o que passar entra em aumento (cadastro 2, volta com 5 = 2 recuperadas + 3 aumento).
-  4. **Passaram a faturar esgoto** (só no esgoto): no cadastro, faturando água sem esgoto em dez/25, e passam a faturar esgoto.
-  6. **Ativas sem faturar** (terceiro subgrupo das recuperadas): ativa no cadastro de dez/25, sem faturar em dez/25, que passa a faturar em 2026. Mesma conta das recuperadas (até as economias do cadastro; o excedente é aumento).
-  - **Esgoto de quem volta (resposta do usuário):** se antes a matrícula faturava só água e volta faturando água e esgoto, no painel Esgoto entra em **Passaram a faturar esgoto**, não em recuperada. Se já faturava esgoto antes, é recuperada. Para saber o "antes" de quem não faturou em dez/25, o cadastro precisa trazer o tipo de faturamento (ou o serviço de esgoto) da ligação: conferir no cabeçalho quando o arquivo chegar.
-  5. **Aumentos:** a partir do **faturado em dez/25** (cadastro 10, faturou 8, vai a 10 = +2), e depois pelo teto (cortada e religada com as mesmas economias não soma de novo).
-  - Faturou em dez/25 = já está na base, qualquer que seja a situação no cadastro (cortada no fim do mês conta como já faturando).
-  - Fora do cadastro mas faturando em dez/25: conta como já faturando e vai para a lista de inconsistências.
-  - Economias do cadastro = Residencial + Comercial + Industrial + Pública (sem Outros).
-  - **Conferências** (cartão com quantidades e download): fora do cadastro faturando em dez/25; inativa/desativada no cadastro faturando em dez/25; economias do cadastro diferentes das faturadas em dez/25; ativa no cadastro sem faturar em dez/25.
 
 - **Base real de água:** ainda não chegou (o usuário vai mandar para análise quando tiver). Quando chegar, conferir os números com ele e a dúvida abaixo.
 
