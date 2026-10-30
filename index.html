@@ -116,6 +116,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .lt.lt-fat .lt-val{font-size:18px}
 .lt-val{font-family:var(--fonte-cond);font-size:24px;font-weight:700;color:var(--marinho);line-height:1.15;font-variant-numeric:tabular-nums}
 .lt-rot{font-size:11.5px;color:var(--azul-claro);line-height:1.3}
+.lt-det span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lt-det{font-size:11.5px;color:#334155;line-height:1.35;margin-top:6px;font-variant-numeric:tabular-nums}
 .lt-sep{border-top:1px solid var(--linha);margin:8px 0}
 .lt-k{font-size:11px;color:var(--azul-claro);line-height:1.25}
@@ -253,7 +254,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.27</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.28</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -1065,7 +1066,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.27';
+const VERSAO_SITE = '1.28';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1088,13 +1089,13 @@ let CAD = null;
 // grupos das economias novas (D.cat, D.cls): os números são os das regras da aba Dados
 const G_NOVA = 1, G_INAT = 2, G_CORT = 3, G_ATIVA = 4, G_ESG = 5, G_AUM = 6, G_REC = 7;
 const GRUPOS = {
-  1: { eco: 'Economias novas na base', mat: 'Matrículas novas na base', curto: 'novas na base', curtoMat: 'novas na base', cor: '#176b9c', txt: '#fff' },
-  2: { eco: 'Economias recuperadas – inativas/desativadas', mat: 'Matrículas recuperadas – inativas/desativadas', curto: 'recuperadas (inativas/desativadas)', curtoMat: 'recuperadas (inativas/desativadas)', cor: '#102840', txt: '#fff' },
-  3: { eco: 'Economias recuperadas – cortadas', mat: 'Matrículas recuperadas – cortadas', curto: 'recuperadas (cortadas)', curtoMat: 'recuperadas (cortadas)', cor: '#1f7a6d', txt: '#fff' },
-  4: { eco: 'Economias recuperadas – ativas sem faturar', mat: 'Matrículas recuperadas – ativas sem faturar', curto: 'recuperadas (ativas sem faturar)', curtoMat: 'recuperadas (ativas sem faturar)', cor: '#7cc6b4', txt: '#102840' },
-  5: { eco: 'Economias que passaram a faturar esgoto', mat: 'Matrículas que passaram a faturar esgoto', curto: 'passaram a faturar esgoto', curtoMat: 'passaram a faturar esgoto', cor: '#d4a72c', txt: '#102840' },
-  6: { eco: 'Aumentos de economias', mat: 'Matrículas com aumento de economias', curto: 'de aumentos', curtoMat: 'com aumento', cor: '#8fb3d1', txt: '#102840' },
-  7: { eco: 'Economias recuperadas da base de dez/25', mat: 'Matrículas recuperadas da base de dez/25', curto: 'recuperadas de dez/25', curtoMat: 'recuperadas de dez/25', cor: '#102840', txt: '#fff' }
+  1: { abv: 'novas', eco: 'Economias novas na base', mat: 'Matrículas novas na base', curto: 'novas na base', curtoMat: 'novas na base', cor: '#176b9c', txt: '#fff' },
+  2: { abv: 'rec. inat./desat.', eco: 'Economias recuperadas – inativas/desativadas', mat: 'Matrículas recuperadas – inativas/desativadas', curto: 'recuperadas (inativas/desativadas)', curtoMat: 'recuperadas (inativas/desativadas)', cor: '#102840', txt: '#fff' },
+  3: { abv: 'rec. cortadas', eco: 'Economias recuperadas – cortadas', mat: 'Matrículas recuperadas – cortadas', curto: 'recuperadas (cortadas)', curtoMat: 'recuperadas (cortadas)', cor: '#1f7a6d', txt: '#fff' },
+  4: { abv: 'rec. ativas', eco: 'Economias recuperadas – ativas sem faturar', mat: 'Matrículas recuperadas – ativas sem faturar', curto: 'recuperadas (ativas sem faturar)', curtoMat: 'recuperadas (ativas sem faturar)', cor: '#7cc6b4', txt: '#102840' },
+  5: { abv: 'p/ esgoto', eco: 'Economias que passaram a faturar esgoto', mat: 'Matrículas que passaram a faturar esgoto', curto: 'passaram a faturar esgoto', curtoMat: 'passaram a faturar esgoto', cor: '#d4a72c', txt: '#102840' },
+  6: { abv: 'aumentos', eco: 'Aumentos de economias', mat: 'Matrículas com aumento de economias', curto: 'de aumentos', curtoMat: 'com aumento', cor: '#8fb3d1', txt: '#102840' },
+  7: { abv: 'rec. de dez/25', eco: 'Economias recuperadas da base de dez/25', mat: 'Matrículas recuperadas da base de dez/25', curto: 'recuperadas de dez/25', curtoMat: 'recuperadas de dez/25', cor: '#102840', txt: '#fff' }
 };
 // grupos que aparecem no painel: com cadastro, as três recuperadas; sem ele, uma só. "Passaram a faturar esgoto" só no esgoto
 const gruposAtivos = () => (CAD ? [G_NOVA, G_INAT, G_CORT, G_ATIVA] : [G_NOVA, G_REC]).concat(D.servico === 'esgoto' ? [G_ESG] : [], [G_AUM]);
@@ -1587,17 +1588,18 @@ function renderResumo(){
   // divisão por grupo na linha do tempo: "258 já existiam na base / 0 economias novas faturando" (esgoto) ou os três grupos (água)
   const ltParte = (arr, oque, r) => GR.map(g => {
     const v = r == null ? sumFrom1(arr[g.k]) : arr[g.k][r];
-    return `${nf0.format(v)} ${oque === 'matrículas' ? g.curtoMat : g.curto}`;
-  }).join('<br>');
+    // rótulo abreviado na linha do tempo; o nome completo fica na dica (title)
+    return `<span title="${esc(oque === 'matrículas' ? g.mat : g.eco)}">${nf0.format(v)} ${g.abv}</span>`;
+  }).join('');
   const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
   const LT = {
-    eco: { nota: `Economias novas faturando esgoto em cada mês, separadas por grupo (${listaGr} e aumentos de economias, só o que passa do maior número já faturado pela matrícula). No fim, o total do ano.`,
+    eco: { nota: `Economias novas faturando esgoto em cada mês, separadas por grupo (${listaGr} e aumentos de economias, só o que passa do maior número já faturado pela matrícula). “novas” = novas na base, “rec.” = recuperadas, “p/ esgoto” = passaram a faturar esgoto; passe o mouse sobre o número para ver o nome completo. No fim, o total do ano.`,
       base: () => ltVal(nf0.format(o.ecoTot[0]), 'economias faturando esgoto na base'),
       mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eC, 'economias', r)),
       extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
       tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(o.eC, 'economias')),
       totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
-    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias. Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. No fim, o total do ano.',
+    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias (“novas” = novas na base, “rec.” = recuperadas, “p/ esgoto” = passaram a faturar esgoto). Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
       mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas', r)),
       tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas')) },

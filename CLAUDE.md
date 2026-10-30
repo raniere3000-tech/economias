@@ -185,6 +185,7 @@ O estilo copia o **painel de faturamento** do usuário (repositório painel-fatu
    - última coluna "Total 2026", mais larga e com fundo tint: os mesmos itens somados no ano;
    - os blocos ficam alinhados entre as colunas com `grid-template-rows: subgrid` (3 linhas por coluna);
    - não mostra troca e aumento.
+   - **rótulos abreviados dos grupos (v1.28, pedido do usuário):** campo `abv` de `GRUPOS` — novas, rec. inat./desat., rec. cortadas, rec. ativas, p/ esgoto, aumentos (rec. de dez/25 sem cadastro), um por linha sem quebra; o nome completo fica no `title` e a legenda das abreviações na nota do cartão.
 3. **Cartão "Economias novas faturando esgoto, por mês":**
    - colunas empilhadas pela origem: economias que já existiam na base em marinho e economias novas faturando em 2026 em azul;
    - **o valor exato fica sempre em cima da coluna**, e as partes aparecem dentro dela quando a altura é de pelo menos 17px;
