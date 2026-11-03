@@ -254,7 +254,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.30</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.31</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -1083,7 +1083,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.30';
+const VERSAO_SITE = '1.31';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1104,19 +1104,17 @@ const DS = { esgoto: null, agua: null, fat_esgoto: null, fat_agua: null };
 // cadastro de dez/25 (subpasta Cadastro): define o grupo de quem não faturava em dez/25. Sem ele, vale o grupo 7
 let CAD = null;
 // grupos das economias novas (D.cat, D.cls): os números são os das regras da aba Dados
-const G_NOVA = 1, G_INAT = 2, G_CORT = 3, G_ATIVA = 4, G_ESG = 5, G_AUM = 6, G_REC = 7;
+const G_NOVA = 1, G_RECUP = 2, G_ESG = 5, G_AUM = 6, G_REC = 7;   // 3 e 4 (recuperadas por situação) saíram na v1.31
 const GRUPOS = {
   1: { abv: 'novas', eco: 'Economias novas na base', mat: 'Matrículas novas na base', curto: 'novas na base', curtoMat: 'novas na base', cor: '#176b9c', txt: '#fff' },
-  2: { abv: 'rec. inat./desat.', eco: 'Economias recuperadas – inativas/desativadas', mat: 'Matrículas recuperadas – inativas/desativadas', curto: 'recuperadas (inativas/desativadas)', curtoMat: 'recuperadas (inativas/desativadas)', cor: '#102840', txt: '#fff' },
-  3: { abv: 'rec. cortadas', eco: 'Economias recuperadas – cortadas', mat: 'Matrículas recuperadas – cortadas', curto: 'recuperadas (cortadas)', curtoMat: 'recuperadas (cortadas)', cor: '#1f7a6d', txt: '#fff' },
-  4: { abv: 'rec. ativas', eco: 'Economias recuperadas – ativas sem faturar', mat: 'Matrículas recuperadas – ativas sem faturar', curto: 'recuperadas (ativas sem faturar)', curtoMat: 'recuperadas (ativas sem faturar)', cor: '#7cc6b4', txt: '#102840' },
+  2: { abv: 'recuperadas', eco: 'Economias recuperadas', mat: 'Matrículas recuperadas', curto: 'recuperadas', curtoMat: 'recuperadas', cor: '#102840', txt: '#fff' },
   5: { abv: 'p/ esgoto', eco: 'Economias que passaram a faturar esgoto', mat: 'Matrículas que passaram a faturar esgoto', curto: 'passaram a faturar esgoto', curtoMat: 'passaram a faturar esgoto', cor: '#d4a72c', txt: '#102840' },
   6: { abv: 'aumentos', eco: 'Aumentos de economias', mat: 'Matrículas com aumento de economias', curto: 'de aumentos', curtoMat: 'com aumento', cor: '#8fb3d1', txt: '#102840' },
   7: { abv: 'rec. de dez/25', eco: 'Economias recuperadas da base de dez/25', mat: 'Matrículas recuperadas da base de dez/25', curto: 'recuperadas de dez/25', curtoMat: 'recuperadas de dez/25', cor: '#102840', txt: '#fff' }
 };
 // grupos que aparecem no painel: com cadastro, as três recuperadas; sem ele, uma só. "Passaram a faturar esgoto" só no esgoto
-const gruposAtivos = () => (CAD ? [G_NOVA, G_INAT, G_CORT, G_ATIVA] : [G_NOVA, G_REC]).concat(D.servico === 'esgoto' ? [G_ESG] : [], [G_AUM]);
-const CLS_NOME = ['Faturando em dez/25', 'Nova na base', 'Recuperada – inativa/desativada', 'Recuperada – cortada', 'Recuperada – ativa sem faturar', 'Passou a faturar esgoto', '', 'Recuperada da base de dez/25'];
+const gruposAtivos = () => (CAD ? [G_NOVA, G_RECUP] : [G_NOVA, G_REC]).concat(D.servico === 'esgoto' ? [G_ESG] : [], [G_AUM]);
+const CLS_NOME = ['Faturando em dez/25', 'Nova na base', 'Recuperada', '', '', 'Passou a faturar esgoto', '', 'Recuperada da base de dez/25'];
 const chave = () => (st.fonte === 'fat' ? 'fat_' : '') + st.painel;
 // nome dos downloads: esgoto, agua, faturamento_esgoto, faturamento_agua
 const ARQ = () => (st.fonte === 'fat' ? 'faturamento_' : '') + SV().arq;
@@ -1391,14 +1389,16 @@ function derive(){
       if (h && !p && !entered){ entered = true; D.entra[m] = r; }
       if (!h && p) D.anyOut[m] = 1;
     }
-    // grupo da matrícula pelo cruzamento do cadastro de dez/25 com o faturamento de dez/25 (regras 8 a 15 da aba Dados).
+    // grupo da matrícula pelo cruzamento do cadastro de dez/25 com o faturamento de dez/25 (regras 8 a 13 da aba Dados).
     // lim = quantas economias contam no grupo quando a matrícula passa a faturar; o que passar disso é aumento
     const ci = D.cadI ? D.cadI[m] : -1, aguaDez = D.present[b] && D.qa[b] > 0;
     let cls = 0, lim = Infinity;
     if (D.hasE[b]) cls = 0;                                                       // faturava em dez/25: já está na base
     else if (esg && (aguaDez || (ci >= 0 && C.sl[ci] !== 1 && C.dict.tipo[C.tipo[ci]] === 'AGUA'))){
       cls = G_ESG; lim = ci >= 0 ? C.eco[ci] : D.qa[b];                           // faturava só água: passou a faturar esgoto
-    } else if (ci >= 0){ cls = C.sl[ci]; if (cls !== G_NOVA) lim = C.eco[ci]; }  // pela SIT_LIG do cadastro
+    } else if (ci >= 0){                                                          // estava no cadastro: recuperada (a situação
+      if (C.sl[ci] === 1) cls = G_NOVA; else { cls = G_RECUP; lim = C.eco[ci]; }  // da ligação não importa; provisória é nova)
+    }
     else if (!C && D.present[b]) cls = G_REC;                                     // sem cadastro: estava na base de dez/25
     else cls = G_NOVA;                                                            // fora do cadastro e sem faturar em dez/25
     D.cls[m] = cls;
@@ -1611,13 +1611,13 @@ function renderResumo(){
   }).join('');
   const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
   const LT = {
-    eco: { nota: `Economias novas faturando esgoto em cada mês, separadas por grupo (${listaGr} e aumentos de economias, só o que passa do maior número já faturado pela matrícula). “novas” = novas na base, “rec.” = recuperadas, “p/ esgoto” = passaram a faturar esgoto; passe o mouse sobre o número para ver o nome completo. No fim, o total do ano.`,
+    eco: { nota: `Economias novas faturando esgoto em cada mês, separadas por grupo (${listaGr} e aumentos de economias, só o que passa do maior número já faturado pela matrícula). “novas” = novas na base, “p/ esgoto” = passaram a faturar esgoto; passe o mouse sobre o número para ver o nome completo. No fim, o total do ano.`,
       base: () => ltVal(nf0.format(o.ecoTot[0]), 'economias faturando esgoto na base'),
       mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eC, 'economias', r)),
       extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
       tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(o.eC, 'economias')),
       totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
-    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias (“novas” = novas na base, “rec.” = recuperadas, “p/ esgoto” = passaram a faturar esgoto). Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. No fim, o total do ano.',
+    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias (“novas” = novas na base, “p/ esgoto” = passaram a faturar esgoto). Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
       mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas', r)),
       tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas')) },
@@ -1699,13 +1699,12 @@ function renderResumo(){
   renderCad();
   traduzTela();
 }
-// Conferências do cadastro de dez/25 com o faturamento de dez/25 (regra 22 da aba Dados). Respeitam os filtros de cidade
+// Conferências do cadastro de dez/25 com o faturamento de dez/25 (regra 20 da aba Dados). Respeitam os filtros de cidade
 // e sub-categoria: na base pela matrícula; fora dela, pelo nome da cidade e da sub-categoria no cadastro
 const CONF = [
   { t: 'Fora do cadastro, faturando esgoto em dez/25', d: 'Contam como já faturando em dez/25 (não são entrada).' },
-  { t: 'Inativas ou desativadas no cadastro, faturando esgoto em dez/25', d: 'Contam como já faturando em dez/25.' },
   { t: 'Economias do cadastro diferentes das economias de esgoto faturadas em dez/25', d: 'Os aumentos partem do faturado em dez/25.' },
-  { t: 'Ativas no cadastro sem faturar esgoto em dez/25', d: 'Se passarem a faturar, entram em “Recuperadas – ativas sem faturar”.' }
+  { t: 'No cadastro sem faturar esgoto em dez/25', d: 'Se passarem a faturar, entram em “Recuperadas” (provisórias, em “Novas na base”).' }
 ];
 function conferencias(){
   const C = CAD, nR = D.refs.length, k = keepMask(), out = CONF.map(() => []);
@@ -1715,34 +1714,31 @@ function conferencias(){
     const ci = D.cadI[m], b = m * nR; if (ci >= 0) naBase[ci] = m;
     if (!k[m] || !D.hasE[b]) continue;
     if (ci < 0) out[0].push(m);
-    else {
-      if (C.sl[ci] === G_INAT) out[1].push(m);
-      if (D.Q[b] !== C.eco[ci]) out[2].push(m);
-    }
+    else if (D.Q[b] !== C.eco[ci]) out[1].push(m);
   }
   const esg = D.servico === 'esgoto';
   for (let ci = 0; ci < C.mats.length; ci++){
-    if (C.dict.slTxt[C.slTxt[ci]] !== 'ATIVA') continue;
+    if (C.sl[ci] === 1) continue;                                        // provisória: entra como nova
     if (esg && C.dict.tipo[C.tipo[ci]] !== 'AGUA E ESGOTO') continue;   // no esgoto, só as ligações com esgoto no cadastro
     const m = naBase[ci];
     if (m >= 0){ if (!k[m] || D.hasE[m * nR]) continue; }
     else if ((nomeCid && !nomeCid.has(C.dict.cid[C.cid[ci]])) || (nomeSub && !nomeSub.has(C.dict.sub[C.sub[ci]]))) continue;
-    out[3].push(m >= 0 ? m : -1 - ci);                                   // fora da base: -1 - índice no cadastro
+    out[2].push(m >= 0 ? m : -1 - ci);                                   // fora da base: -1 - índice no cadastro
   }
   return out;
 }
 function renderCad(){
   if (!CAD){
-    $('#lCad').textContent = 'O cadastro de dez/25 não está carregado. Coloque o arquivo na subpasta Cadastro da pasta conectada e clique em ↻ Atualizar: ele separa as recuperadas em inativas/desativadas, cortadas e ativas sem faturar e mostra aqui as conferências.';
+    $('#lCad').textContent = 'O cadastro de dez/25 não está carregado. Coloque o arquivo na subpasta Cadastro da pasta conectada e clique em ↻ Atualizar: ele separa as recuperadas (estavam no cadastro) das novas na base e mostra aqui as conferências.';
     $('#tblCad').innerHTML = ''; return;
   }
   const out = conferencias(), C = CAD, nR = D.refs.length;
-  const eco = (i, x) => x.reduce((t, v) => { const ci = v >= 0 ? D.cadI[v] : -1 - v; return t + (i === 3 ? C.eco[ci] : D.Q[v * nR]); }, 0);
+  const eco = (i, x) => x.reduce((t, v) => { const ci = v >= 0 ? D.cadI[v] : -1 - v; return t + (i === 2 ? C.eco[ci] : D.Q[v * nR]); }, 0);
   $('#tblCad').innerHTML = `<table class="tab-seg"><thead><tr><th>Conferência</th><th>Matrículas</th><th>Economias</th><th>O que acontece</th><th></th></tr></thead><tbody>` +
-    CONF.map((c, i) => `<tr><td>${c.t}</td><td>${nf0.format(out[i].length)}</td><td>${i === 2 ? '–' : nf0.format(eco(i, out[i]))}</td><td class="mudo">${c.d}</td>` +
+    CONF.map((c, i) => `<tr><td>${c.t}</td><td>${nf0.format(out[i].length)}</td><td>${i === 1 ? '–' : nf0.format(eco(i, out[i]))}</td><td class="mudo">${c.d}</td>` +
       `<td>${out[i].length ? `<button class="btn-just" type="button" data-conf="${i}">⬇ Baixar lista</button>` : ''}</td></tr>`).join('') + '</tbody></table>';
   $('#lCad').textContent = `Cadastro de dez/25: ${nf0.format(C.mats.length)} matrículas (${C.meta ? C.meta.arquivos.join(', ') : ''}). ` +
-    'Economias: na base, as de esgoto faturadas em dez/25; nas ativas sem faturar, as do cadastro. Respeita os filtros de cidade e sub-categoria. As listas trazem o cadastro e o faturamento de dez/25 de cada matrícula.';
+    'Economias: na base, as de esgoto faturadas em dez/25; nas sem faturar em dez/25, as do cadastro. Respeita os filtros de cidade e sub-categoria. As listas trazem o cadastro e o faturamento de dez/25 de cada matrícula.';
 }
 function exportConf(i){
   const out = conferencias()[i], C = CAD, nR = D.refs.length, labels = D.refs.map(refLabel);
@@ -2098,7 +2094,7 @@ async function exportTodas(){
 }
 const MOVS = ['', 'Passou a faturar esgoto', 'Passou a faturar mais economias', 'Voltou a faturar esgoto', 'Deixou de faturar esgoto',
   'Passou a faturar menos economias', 'Voltou a economias que já tinha'];
-const GR_NOME = { 1: 'Novas na base', 2: 'Recuperadas – inativas/desativadas', 3: 'Recuperadas – cortadas', 4: 'Recuperadas – ativas sem faturar',
+const GR_NOME = { 1: 'Novas na base', 2: 'Recuperadas',
   5: 'Passaram a faturar esgoto', 6: 'Aumentos de economias', 7: 'Recuperadas da base de dez/25' };
 const grupoNome = c => c ? T(GR_NOME[c]) : '';
 // grupo da matrícula e dados do cadastro de dez/25, nos downloads
@@ -2156,7 +2152,7 @@ function motivo(m, cat){
   if (cat === G_REC) return 'Recuperada (base de dez/25)';
   const ci = D.cadI[m], sit = ci >= 0 ? CAD.dict.slTxt[CAD.slTxt[ci]] : '';
   if (cat === G_NOVA) return ci >= 0 ? `Nova na base (${capital(sit)})` : 'Nova na base (fora do cadastro)';
-  return `Recuperada (${capital(sit)}${cat === G_ATIVA && sit !== 'ATIVA' ? ', tratada como ativa sem faturar' : cat === G_ATIVA ? ' sem faturar' : ''})`;
+  return 'Recuperada';                                     // a situação da ligação fica só na coluna SIT_LIG_CADASTRO_DEZ25
 }
 async function exportEntradas(){
   const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
@@ -2278,8 +2274,8 @@ function htmlAntesDepois(){
     `<tr><td>Diferença</td>${L1.map((_, i) => `<td>${dif(fn.ent[i + 1], fo.ent[i + 1])}</td>`).join('')}</tr></tbody></table>` +
     (afet.length ? '<button class="btn-just" type="button" id="btnAntesDepois">⬇ Baixar matrículas afetadas</button>' : '');
 }
-/* ---------- diagnóstico das recuperadas – ativas sem faturar (v1.30, não muda nenhum número) ----------
-   Abre as matrículas que entraram pelo grupo 4 pela situação delas na base do estudo em dez/25. */
+/* ---------- diagnóstico das recuperadas (v1.30; desde a v1.31 vale para o grupo Recuperadas inteiro; não muda números) ----------
+   Abre as matrículas que entraram como recuperadas pela situação delas na base em dez/25. */
 const DG_NOME = ['Ausente da base em dez/25', 'Em dez/25 só com o outro serviço faturado', 'Em dez/25 com valor do serviço, sem economias', 'Em dez/25 com tudo zerado'];
 function dgDez(m){
   const b = m * D.refs.length, Qo = D.servico === 'agua' ? D.qe : D.qa, Fo = D.servico === 'agua' ? D.fe : D.fa;
@@ -2290,8 +2286,8 @@ function dgDez(m){
 function diagAtivas(){
   const nR = D.refs.length, k = keepMask(), out = [];
   for (let m = 0; m < D.mats.length; m++){
-    if (!k[m] || D.cls[m] !== G_ATIVA || D.ligMes[m] < 0) continue;
-    let eco = 0; for (let r = 1; r < nR; r++){ const j = m * nR + r; if (D.cat[j] === G_ATIVA) eco += D.ent[j] - D.eA[j]; }
+    if (!k[m] || D.cls[m] !== G_RECUP || D.ligMes[m] < 0) continue;
+    let eco = 0; for (let r = 1; r < nR; r++){ const j = m * nR + r; if (D.cat[j] === G_RECUP) eco += D.ent[j] - D.eA[j]; }
     let meses = 0; for (let r = 1; r < nR; r++) if (D.hasE[m * nR + r]) meses++;
     const r0 = D.ligMes[m];
     out.push({ m, dg: dgDez(m), eco, r0, grp: D.grp[m * nR + r0], meses });
@@ -2300,12 +2296,12 @@ function diagAtivas(){
 }
 function htmlDiagAtivas(){
   if (!D) return '<p class="nota-secao">Carregue a base para ver o diagnóstico.</p>';
-  if (!CAD) return '<p class="nota-secao">Sem o cadastro de dez/25 não existe o grupo “Recuperadas – ativas sem faturar”.</p>';
+  if (!CAD) return '<p class="nota-secao">Sem o cadastro de dez/25 não existe o grupo “Recuperadas”.</p>';
   const lst = diagAtivas(), L1 = D.refs.slice(1).map(refLabel), nR = D.refs.length;
   const tot = lst.reduce((t, x) => t + x.eco, 0);
   const porDg = DG_NOME.map((_, i) => lst.filter(x => x.dg === i));
   const pct = v => tot ? nf1.format(v / tot * 100) + '%' : '–';
-  let h = `<p class="nota-secao">Painel ${T('esgoto')} da base ${st.fonte === 'fat' ? 'dos arquivos do faturamento' : 'do estudo'}, com os filtros de cidade e sub-categoria. ${nf0.format(lst.length)} matrículas e ${nf0.format(tot)} economias entraram como “Recuperadas – ativas sem faturar”: SIT_LIG ATIVA no cadastro de dez/25 e sem economias de ${T('esgoto')} faturadas em dez/25 na base. Como a exportação só traz quem teve faturamento no mês, “ausente da base em dez/25” quer dizer que não houve conta da matrícula com Referência dez/25.</p>` +
+  let h = `<p class="nota-secao">Painel ${T('esgoto')} da base ${st.fonte === 'fat' ? 'dos arquivos do faturamento' : 'do estudo'}, com os filtros de cidade e sub-categoria. ${nf0.format(lst.length)} matrículas e ${nf0.format(tot)} economias entraram como “Recuperadas”: estavam no cadastro de dez/25 (qualquer situação, menos provisória) e sem economias de ${T('esgoto')} faturadas em dez/25 na base. Como a exportação só traz quem teve faturamento no mês, “ausente da base em dez/25” quer dizer que não houve conta da matrícula com Referência dez/25.</p>` +
     `<table class="tab-seg"><thead><tr><th>Situação na base em dez/25</th><th>Matrículas</th><th>Economias</th><th>% das economias</th></tr></thead><tbody>` +
     porDg.map((x, i) => { const e = x.reduce((t, y) => t + y.eco, 0); return `<tr><td>${T(DG_NOME[i])}</td><td>${nf0.format(x.length)}</td><td>${nf0.format(e)}</td><td>${pct(e)}</td></tr>`; }).join('') + '</tbody></table>';
   h += `<table class="tab-seg"><thead><tr><th>Economias por mês de entrada</th>${L1.map(l => `<th>${l}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
@@ -2319,7 +2315,7 @@ function htmlDiagAtivas(){
   h += top(x => x.grp < 0 ? '(sem grupo)' : String(x.grp), 'COD_GRUPO no mês de entrada (15 maiores)') + top(x => D.dict.cid[D.cid[x.m]], 'Cidade (15 maiores)');
   const mesesF = new Map(); lst.forEach(x => mesesF.set(x.meses, (mesesF.get(x.meses) || 0) + 1));
   h += `<p class="nota-secao">Meses faturando em 2026 (de ${L1.length}): ${[...mesesF].sort((a, b) => a[0] - b[0]).map(([n, c]) => `${n} ${n === 1 ? 'mês' : 'meses'}: ${nf0.format(c)} matrículas`).join(' · ')}.</p>`;
-  return h + (lst.length ? '<button class="btn-just" type="button" id="btnDiagAtivas">⬇ Baixar lista das ativas sem faturar</button>' : '');
+  return h + (lst.length ? '<button class="btn-just" type="button" id="btnDiagAtivas">⬇ Baixar lista das recuperadas</button>' : '');
 }
 function exportDiagAtivas(){
   const lst = diagAtivas(), nR = D.refs.length, labels = D.refs.map(refLabel), C = CAD;
@@ -2335,7 +2331,7 @@ function exportDiagAtivas(){
       labels[x.r0], x.grp >= 0 ? x.grp : '', x.eco, D.ecoNov[m], x.meses,
       C.dict.slTxt[C.slTxt[ci]], C.dict.sc[C.sc[ci]], C.dict.tipo[C.tipo[ci]], C.eco[ci], ...labels.map((_, r) => D.present[b + r] ? D.Q[b + r] : '')].map(q).join(';');
   });
-  baixa(['\ufeff' + head.join(';') + '\r\n' + rows.join('\r\n') + '\r\n'], `diagnostico_ativas_sem_faturar_${ARQ()}.csv`);
+  baixa(['\ufeff' + head.join(';') + '\r\n' + rows.join('\r\n') + '\r\n'], `diagnostico_recuperadas_${ARQ()}.csv`);
 }
 /* ---------- aba Dados: as regras usadas no painel ----------
    Toda mudança de regra ou de cálculo tem de ser escrita aqui também, na mesma versão (pedido do usuário). */
@@ -2345,10 +2341,10 @@ function renderDados(){
   let tabCad = '';
   if (C){
     const cont = new Map();
-    for (let i = 0; i < C.mats.length; i++){ const t = C.dict.slTxt[C.slTxt[i]]; const x = cont.get(t) || { n: 0, e: 0, g: C.sl[i] }; x.n++; x.e += C.eco[i]; cont.set(t, x); }
-    tabCad = `<table class="tab-seg"><thead><tr><th>SIT_LIG no cadastro</th><th>Matrículas</th><th>Economias</th><th>Grupo, se não faturou em dez/25 e passar a faturar</th></tr></thead><tbody>` +
-      [...cont].sort((a, b) => b[1].n - a[1].n).map(([t, x]) => `<tr><td>${esc(t)}</td><td>${nf0.format(x.n)}</td><td>${nf0.format(x.e)}</td><td>${x.g}. ${GR_NOME[x.g]}</td></tr>`).join('') + '</tbody></table>' +
-      (Object.keys(C.stats.outras || {}).length ? `<p class="nota-secao">Situações não previstas, tratadas como ativas: ${esc(Object.keys(C.stats.outras).join(', '))}. Avise para definir o grupo delas.</p>` : '');
+    for (let i = 0; i < C.mats.length; i++){ const t = C.dict.slTxt[C.slTxt[i]]; const x = cont.get(t) || { n: 0, e: 0, g: C.sl[i] === 1 ? G_NOVA : G_RECUP }; x.n++; x.e += C.eco[i]; cont.set(t, x); }
+    tabCad = `<table class="tab-seg"><thead><tr><th>SIT_LIG no cadastro</th><th>Matrículas</th><th>Economias</th><th>Grupo, se não faturou em dez/25 e passar a faturar (no esgoto, quem faturava só água vai para “Passaram a faturar esgoto”)</th></tr></thead><tbody>` +
+      [...cont].sort((a, b) => b[1].n - a[1].n).map(([t, x]) => `<tr><td>${esc(t)}</td><td>${nf0.format(x.n)}</td><td>${nf0.format(x.e)}</td><td>${GR_NOME[x.g]}</td></tr>`).join('') + '</tbody></table>' +
+      (Object.keys(C.stats.outras || {}).length ? `<p class="nota-secao">Outras situações no cadastro (contam como recuperadas, como qualquer situação que não seja provisória): ${esc(Object.keys(C.stats.outras).join(', '))}.</p>` : '');
   }
   $('#dadosRegras').innerHTML = `
   <h2>Regras do painel · versão ${VERSAO_SITE}</h2>
@@ -2357,7 +2353,7 @@ function renderDados(){
   <h2>Arquivos em uso</h2>
   <ul>${arq('Cadastro de dez/25', C)}${arq('Base do estudo · esgoto', DS.esgoto)}${arq('Base do estudo · água', DS.agua)}${arq('Arquivos do faturamento', DS.fat_esgoto || DS.fat_agua)}</ul>
 
-  <h2>Diagnóstico: recuperadas – ativas sem faturar</h2>
+  <h2>Diagnóstico: recuperadas</h2>
   ${htmlDiagAtivas()}
 
   <h2>Antes e depois da v1.29: mais de um contrato no mesmo mês</h2>
@@ -2368,57 +2364,55 @@ function renderDados(){
     ${li('<b>Pasta conectada.</b> Subpastas: <b>Esgoto</b> (base do estudo de esgoto e listas “Virar”), <b>Água</b> (base do estudo de água), <b>Faturamento</b> (fatura e consumo do painel de faturamento) e <b>Cadastro</b> (cadastro de dez/25). Arquivos que começam com ~$ são ignorados.')}
     ${li('<b>Base do estudo.</b> Uma linha por matrícula e mês (Referência), com Qtd_eco_fat_esgoto, Qtd_eco_fat_agua, Faturamento_bruto_direta_esgoto, Faturamento_bruto_direta_agua e Eco_total. Entram todos os contratos da matrícula. <b>Mais de um contrato da mesma matrícula no mesmo mês</b> (troca de titularidade, desde a v1.29): a matrícula fatura no mês se qualquer contrato faturou; as economias são o maior número entre os contratos (não duplica) e o faturamento é a soma dos contratos. Nome, situação e grupo de leitura vêm do contrato mais recente (ULTIMO_CONTRATO = SIM); a coluna Último contrato do mês mostra “SIM + NÃO”. <span class=\"ex\">Ex.: em dez/25, contrato encerrado faturou 1 economia e o novo contrato (SIM) veio com 0 → a matrícula faturou 1 em dez/25. Até a v1.28 valia só a linha do último contrato, e ela aparecia sem faturar.</span> O TIPO_FATURAMENTO desta base é o tipo de hoje e não entra em nenhuma conta.')}
     ${li('<b>Arquivos do faturamento.</b> Fatura: só as rubricas VALOR DE AGUA e VALOR DE ESGOTO, no mês da Referencia de Leitura; o faturamento do mês é a soma do Valor Parcela. Consumo: um arquivo por mês, com o mês no nome. Economias da ligação no mês = Residencial + Comercial + Industrial + Pública do consumo, quando o Consumo Faturado é maior que 0 e a fatura tem a rubrica do serviço. Cada ligação conta uma vez por mês (o painel de faturamento soma por linha de fatura; essa conta aparece só na comparação).')}
-    ${li('<b>Cadastro de dez/25.</b> Foto de dezembro de 2025, uma linha por matrícula. Economias do cadastro = QTD_ECO_RES + QTD_ECO_COM + QTD_ECO_IND + QTD_ECO_PUB (sem Outros). A situação que vale é a da ligação (SIT_LIG), não a do contrato. O TIPO_FATURAMENTO do cadastro é o de dez/25 e diz se a ligação faturava só água antes.')}
+    ${li('<b>Cadastro de dez/25.</b> Foto de dezembro de 2025, uma linha por matrícula. Economias do cadastro = QTD_ECO_RES + QTD_ECO_COM + QTD_ECO_IND + QTD_ECO_PUB (sem Outros). <b>Desde a v1.31 o cadastro serve só para saber se a matrícula já estava na base</b> (recuperada) ou não (nova): a situação da ligação (SIT_LIG) não entra nas contas, porque traz muitas informações desencontradas — a única exceção é PROVISÓRIA, que conta como nova. O TIPO_FATURAMENTO do cadastro (dez/25) continua dizendo se a ligação faturava só água ou água e esgoto. As economias do cadastro limitam quanto conta como recuperada (regra 10).')}
     ${li('<b>Listas “Virar para Água e Esgoto”</b> (só no esgoto): servem só para comparar em que mês cada matrícula começou a faturar. Nunca somam nos totais.')}
   </ol>
 
   <h2>2. Quando a matrícula está faturando</h2>
   <ol start="6">
     ${li('<b>Faturando esgoto no mês</b> = economias de esgoto faturadas no mês maiores que 0 (na água, economias de água). Matrícula que não aparece no mês não está faturando.')}
-    ${li('<b>Faturando em dez/25 = já está na base.</b> Quem faturou em dez/25 não entra como nova nem como recuperada, qualquer que seja a situação no cadastro (inclusive cortada no fim do mês, inativa ou fora do cadastro). Só pode somar por aumento de economias.')}
+    ${li('<b>Faturando em dez/25 = já está na base.</b> Quem faturou em dez/25 não entra como nova nem como recuperada, esteja ou não no cadastro. Só pode somar por aumento de economias.')}
   </ol>
 
   <h2>3. Grupo de cada matrícula que não faturava em dez/25</h2>
-  <p class="nota-secao">Sai do cruzamento do cadastro de dez/25 com o faturamento de dez/25. O grupo vale para a primeira vez que a matrícula passa a faturar em 2026.</p>
+  <p class="nota-secao">Sai do cruzamento do cadastro de dez/25 (só se a matrícula estava nele) com o faturamento de dez/25 da própria base da aba. O grupo vale para a primeira vez que a matrícula passa a faturar em 2026.</p>
   <ol start="8">
-    ${li('<b>Grupo 1 · Novas na base:</b> fora do cadastro de dez/25, ou no cadastro como PROVISÓRIA (ligação ainda pendente). Todas as economias da primeira vez contam como novas na base.')}
-    ${li('<b>Grupo 2 · Recuperadas – inativas/desativadas:</b> SIT_LIG INATIVA ou DESATIVADA no cadastro.')}
-    ${li('<b>Grupo 3 · Recuperadas – cortadas:</b> SIT_LIG CORTADA ou CORTE PEDIDO.')}
-    ${li('<b>Grupo 4 · Recuperadas – ativas sem faturar:</b> SIT_LIG ATIVA (e qualquer situação não prevista, listada abaixo).')}
-    ${li('<b>Limite das recuperadas (grupos 2, 3 e 4):</b> conta como recuperada até as economias do cadastro de dez/25; o que passar disso conta como aumento. <span class="ex">Ex.: cadastro com 2 economias, volta faturando 5 → 2 recuperadas + 3 de aumento.</span>')}
-    ${li('<b>Grupo 5 · Passaram a faturar esgoto</b> (só no painel Esgoto): não faturava esgoto em dez/25 e faturava só água antes, isto é, faturava água em dez/25 ou estava no cadastro com TIPO_FATURAMENTO AGUA (menos as PROVISÓRIAS). Vale antes dos grupos 2 a 4: inativa ou cortada que faturava só água e volta com água e esgoto entra aqui; se já tinha esgoto (AGUA E ESGOTO), é recuperada. Conta até as economias do cadastro (fora do cadastro, até as economias de água faturadas em dez/25); o que passar é aumento.')}
-    ${li('<b>Grupo 6 · Aumentos de economias:</b> economias acima do teto da matrícula (regra 16), em quem já faturava em dez/25 e também em novas e recuperadas depois da primeira vez. Para quem faturava em dez/25, o ponto de partida é o faturado em dez/25, não o cadastro. <span class="ex">Ex.: cadastro com 10, faturou 8 em dez/25, passa a 10 → +2 de aumento.</span>')}
-    ${li('<b>Sem cadastro carregado:</b> quem estava na base em dez/25 sem faturar fica num grupo só, “Recuperadas da base de dez/25” (grupo 7); quem não estava, em novas na base.')}
+    ${li('<b>Grupo 1 · Novas na base:</b> não estava no cadastro de dez/25, ou estava como PROVISÓRIA (ligação ainda pendente). Todas as economias da primeira vez contam como novas na base.')}
+    ${li('<b>Grupo 2 · Recuperadas:</b> estava no cadastro de dez/25, qualquer que fosse a situação da ligação (ativa, cortada, inativa, desativada…), e não faturou em dez/25. A situação aparece nos downloads só para consulta.')}
+    ${li('<b>Limite das recuperadas:</b> conta como recuperada até as economias do cadastro de dez/25; o que passar disso conta como aumento. <span class="ex">Ex.: cadastro com 2 economias, volta faturando 5 → 2 recuperadas + 3 de aumento.</span>')}
+    ${li('<b>Grupo 3 · Passaram a faturar esgoto</b> (só no painel Esgoto): não faturava esgoto em dez/25 e faturava só água antes, isto é, faturava água em dez/25 ou estava no cadastro com TIPO_FATURAMENTO AGUA (menos as provisórias). Vale antes das recuperadas: quem faturava só água e volta com água e esgoto entra aqui; se já tinha esgoto (AGUA E ESGOTO no cadastro), é recuperada. Conta até as economias do cadastro (fora do cadastro, até as economias de água faturadas em dez/25); o que passar é aumento.')}
+    ${li('<b>Grupo 4 · Aumentos de economias:</b> economias acima do teto da matrícula (regra 14), em quem já faturava em dez/25 e também em novas e recuperadas depois da primeira vez. Para quem faturava em dez/25, o ponto de partida é o faturado em dez/25, não o cadastro. <span class="ex">Ex.: cadastro com 10, faturou 8 em dez/25, passa a 10 → +2 de aumento.</span>')}
+    ${li('<b>Sem cadastro carregado:</b> quem estava na base da aba em dez/25 sem faturar conta como “Recuperadas da base de dez/25”; quem não estava, como novas na base.')}
   </ol>
   ${tabCad}
 
   <h2>4. Como as economias novas faturando são somadas</h2>
-  <ol start="16">
+  <ol start="14">
     ${li('<b>Regra do teto (esgoto e água).</b> Cada matrícula tem um teto: as economias faturadas em dez/25 para quem já faturava; 0 para quem não faturava. Em cada mês, só soma o que passar do teto, e o teto sobe para o novo valor. Cortada e religada com as mesmas economias não soma de novo. <span class="ex">Ex.: 3 em dez/25 → 5 em mar (+2) → 0 em abr (corte) → 5 em mai (não soma) → 6 em jun (+1).</span>')}
-    ${li('<b>Economias novas faturando no mês</b> = soma dos grupos 1 a 6 no mês. O total do ano é a soma dos meses, sem descontar quem deixou de faturar.')}
+    ${li('<b>Economias novas faturando no mês</b> = soma dos grupos 1 a 4 no mês. O total do ano é a soma dos meses, sem descontar quem deixou de faturar.')}
     ${li('<b>Matrículas novas faturando:</b> cada matrícula conta uma vez no ano, no primeiro mês em que soma economias, no grupo dessa primeira entrada.')}
     ${li('<b>Deixaram de faturar</b> (só para conhecimento, nunca descontado): economias do mês anterior de quem deixou de faturar, mais a redução de economias de quem continua faturando. <b>Voltaram a faturar</b> (não somadas): quem volta depois de sair sem passar do teto.')}
   </ol>
 
   <h2>5. Faturamento</h2>
-  <ol start="20">
+  <ol start="18">
     ${li('<b>Faturamento do mês:</b> soma de Faturamento_bruto_direta_esgoto (base do estudo) ou do Valor Parcela da rubrica VALOR DE ESGOTO (arquivos do faturamento). Na água, as colunas de água.')}
     ${li('<b>Faturamento das economias novas:</b> de quem não faturava em dez/25, todo o faturamento do serviço a partir do mês em que passou a faturar; de quem já faturava em dez/25 e aumentou, só a parte proporcional: faturamento × (economias do mês − economias de dez/25) ÷ economias do mês. <b>Faturamento existente</b> = total − novas.')}
   </ol>
 
   <h2>6. Conferências e comparações</h2>
-  <ol start="22">
-    ${li('<b>Conferência com o cadastro</b> (Resumo): (a) fora do cadastro e faturando em dez/25; (b) inativas ou desativadas no cadastro faturando em dez/25; (c) economias do cadastro diferentes das faturadas em dez/25; (d) ativas no cadastro sem faturar em dez/25 (no esgoto, só as que têm AGUA E ESGOTO no cadastro). Cada uma tem a lista para baixar.')}
+  <ol start="20">
+    ${li('<b>Conferência com o cadastro</b> (Resumo): (a) fora do cadastro e faturando em dez/25; (b) economias do cadastro diferentes das faturadas em dez/25; (c) no cadastro sem faturar em dez/25, qualquer situação menos provisória (no esgoto, só as que têm AGUA E ESGOTO no cadastro). Desde a v1.31 não há conferência pela situação da ligação. Cada uma tem a lista para baixar.')}
     ${li('<b>Comparação com a base do estudo</b> (aba Arquivos do faturamento): por mês, economias faturando, faturamento, economias novas faturando e matrículas faturando nas duas origens, com a diferença. O filtro de cidade vale pelo nome; o de sub-categoria não entra.')}
     ${li('<b>Divergências</b> (Consolidado): economias do serviço diferentes do Eco_total, ou economias sem valor faturado do serviço, nos meses faturando.')}
     ${li('<b>Filtros</b> de cidade e sub-categoria valem para todo o Resumo, o Consolidado e os downloads, pela cidade e sub-categoria mais recentes da matrícula.')}
   </ol>
 
   <h2>7. Downloads</h2>
-  <ol start="26">
+  <ol start="24">
     ${li('Todos os arquivos usam ponto e vírgula, vírgula decimal e trazem PRIMEIRO_MES_FATURANDO_ESGOTO logo depois dos dados da matrícula. ORIGEM é o grupo da matrícula pelo cruzamento com o cadastro; SIT_LIG_CADASTRO_DEZ25, TIPO_FATURAMENTO_CADASTRO_DEZ25 e ECO_CADASTRO_DEZ25 vêm do cadastro.')}
-    ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO detalhado pela SIT_LIG do cadastro — Nova na base (fora do cadastro ou Provisória), Recuperada (Inativa), Recuperada (Desativada), Recuperada (Cortada), Recuperada (Corte pedido), Recuperada (Ativa sem faturar), Passou a faturar esgoto ou Aumento de economias — e GRUPO. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também a situação na base em dez/25 (NA_BASE_DEZ25, DIAGNOSTICO_DEZ25, grupo, economias e R$ de água e esgoto), as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
-    ${li('<b>Diagnóstico das recuperadas – ativas sem faturar</b> (topo desta aba, não muda nenhum número): abre as matrículas do grupo 4 pela situação na base em dez/25 — ausente da base (a exportação só traz quem teve faturamento no mês, então não houve conta com Referência dez/25), só com o outro serviço faturado, com valor do serviço sem economias, ou com tudo zerado — e mostra essas economias por mês de entrada, por COD_GRUPO do mês de entrada, por cidade e pelo número de meses faturando em 2026, com a lista para baixar (economias do serviço mês a mês).')}
+    ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO — Nova na base (fora do cadastro ou Provisória), Recuperada, Passou a faturar esgoto ou Aumento de economias — e GRUPO; a situação da ligação no cadastro vem em SIT_LIG_CADASTRO_DEZ25, só para consulta. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também a situação na base em dez/25 (NA_BASE_DEZ25, DIAGNOSTICO_DEZ25, grupo, economias e R$ de água e esgoto), as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
+    ${li('<b>Diagnóstico das recuperadas</b> (topo desta aba, não muda nenhum número): abre as matrículas do grupo Recuperadas pela situação na base em dez/25 — ausente da base (a exportação só traz quem teve faturamento no mês, então não houve conta com Referência dez/25), só com o outro serviço faturado, com valor do serviço sem economias, ou com tudo zerado — e mostra essas economias por mês de entrada, por COD_GRUPO do mês de entrada, por cidade e pelo número de meses faturando em 2026, com a lista para baixar (economias do serviço mês a mês).')}
     ${li('<b>Analítico de movimentos:</b> com SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS dá as economias novas faturando do Resumo; ECONOMIAS_NO_GRUPO vai para o GRUPO da linha e ECONOMIAS_AUMENTO para os aumentos; CONTA_COMO_MATRICULA = SIM dá as matrículas novas faturando.')}
   </ol>`;
 }

@@ -72,13 +72,13 @@ for m in T:
     nova = entra > 0 and entra == prim
     e_orig = e_nova if nova else e_base
     ligou = False  # a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
-    # grupo da matrícula (0 já faturava em dez/25; 1 nova; 2 inativa/desativada; 3 cortada; 4 ativa; 5 passou a faturar
-    # esgoto; 7 recuperada sem cadastro) e quantas economias contam no grupo na primeira vez (o resto é aumento, 6)
+    # grupo da matrícula (0 já faturava em dez/25; 1 nova; 2 recuperada, qualquer situação menos provisória; 5 passou a faturar
+    # esgoto; 7 recuperada sem cadastro; desde a v1.31 não há 3 e 4) e quantas economias contam no grupo na primeira vez (o resto é aumento, 6)
     c = CAD.get(str(m)); na_dez = k0 in prio_m.get(m, ()); agua0 = na_dez and QA[m].get(k0, 0) > 0
     inf = float('inf'); lim = inf
     if h[0]: gm = 0
     elif not AGUA and (agua0 or (c and c[0] != 1 and c[1] == 'AGUA')): gm = 5; lim = c[2] if c else QA[m][k0]
-    elif c: gm = c[0]; lim = inf if gm == 1 else c[2]
+    elif c: gm = 1 if c[0] == 1 else 2; lim = inf if gm == 1 else c[2]   # v1.31: só importa estar no cadastro (provisória é nova)
     elif not CAD and na_dez: gm = 7
     else: gm = 1
     gm_cont[gm] += 1
@@ -123,7 +123,7 @@ print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_b
 print(f'Ligações que passaram a faturar esgoto em 2026: {sum(lig):,.0f}  (já na base {sum(lig)-sum(lig_nova):,.0f} + matrículas novas {sum(lig_nova):,.0f})')
 print('Por mês, ligações que já tinham esgoto e aumentaram:', ' '.join(f'{rot[r]} {lig_aum[r]:.0f}' for r in range(1, n)))
 print('Por mês, economias acrescentadas nelas:', ' '.join(f'{rot[r]} {aum[r]:.0f}' for r in range(1, n)))
-NG = {1: 'novas na base', 2: 'recup. inativas/desativadas', 3: 'recup. cortadas', 4: 'recup. ativas sem faturar', 5: 'passaram a faturar esgoto', 6: 'aumentos', 7: 'recup. de dez/25 (sem cadastro)'}
+NG = {1: 'novas na base', 2: 'recuperadas', 3: '-', 4: '-', 5: 'passaram a faturar esgoto', 6: 'aumentos', 7: 'recup. de dez/25 (sem cadastro)'}
 gs = [g for g in range(1, 8) if sum(grupo[g]) or sum(lig_t[g])]
 print('Regra do teto, por mês (economias por grupo):')
 print('mês     ' + ''.join(f'{g:>8}' for g in gs) + '   total  matrículas  voltaram')
@@ -135,9 +135,8 @@ print('Matrículas por grupo (todas, com ou sem entrada):', {NG.get(g, 'já fatu
 if CAD:
     fat0 = [m for m in T if T[m].get(k0)]
     print('Conferências: fora do cadastro faturando', sum(1 for m in fat0 if str(m) not in CAD),
-          '| inativas/desativadas faturando', sum(1 for m in fat0 if str(m) in CAD and CAD[str(m)][0] == 2),
           '| economias diferentes', sum(1 for m in fat0 if str(m) in CAD and CAD[str(m)][2] != Q[m][k0]),
-          '| ativas sem faturar', sum(1 for mk, v in CAD.items() if v[3] == 'ATIVA' and (AGUA or v[1] == 'AGUA E ESGOTO')
+          '| no cadastro sem faturar', sum(1 for mk, v in CAD.items() if v[0] != 1 and (AGUA or v[1] == 'AGUA E ESGOTO')
                                       and not any(T[m].get(k0) for m in T if str(m) == mk)))
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
 
