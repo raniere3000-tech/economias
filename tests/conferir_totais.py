@@ -50,6 +50,11 @@ for ws in wb.worksheets:
         F[m][k] += float(g(COL_F) or 0)
         E[m][k] = max(E[m][k], int(g('Eco_total') or 0))
         QA[m][k] = max(QA[m][k], int(g('Qtd_eco_fat_agua') or 0))
+# economias do mês limitadas ao Eco_total (v1.34): duas contas na mesma referência dobram a Qtd_eco_fat
+limitadas = 0
+for m in Q:
+    for k in Q[m]:
+        if E[m].get(k, 0) > 0 and Q[m][k] > E[m][k]: limitadas += Q[m][k] - E[m][k]; Q[m][k] = E[m][k]
 refs = sorted(refs); n = len(refs)
 k0 = refs[0]
 base_mat = sum(1 for m in T if T[m].get(k0))
@@ -117,6 +122,7 @@ rot = [f'{["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","de
 print('mês      na base  mat.novas  novas  ligações  saídas  reentr.  fat_novas      fat_total')
 for r in range(n):
     print(f'{rot[r]:7} {e_base[r]:8.0f} {e_nova[r]:10.0f} {nov[r]+aum[r]:6.0f} {lig[r]:9.0f} {sai[r]+red[r]:7.0f} {ree[r]:8.0f} {fat_novas[r]:11,.0f} {fat_tot[r]:14,.0f}')
+print(f'Economias limitadas ao Eco_total: {limitadas:,.0f}')
 print(f'Meses de matrícula com mais de um contrato: {len(multi):,.0f} ({repetidas:,.0f} linhas a mais; economias = maior, faturamento = soma)')
 print(f'Base em {rot[0]}: {base_mat:,.0f} matrículas e {base_eco:,.0f} economias faturando esgoto (economias de esgoto faturadas > 0)')
 print(f'Economias novas em 2026: {sum(nov)+sum(aum):,.0f}  (já na base {sum(e_base):,.0f} + matrículas novas {sum(e_nova):,.0f})')
