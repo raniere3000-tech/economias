@@ -168,6 +168,10 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .tab-seg th:first-child{z-index:3;background:var(--marinho)}
 .tab-seg td:first-child{color:#334155;font-weight:600;font-family:var(--fonte);font-size:12.5px}
 .tab-seg tbody tr:hover td{background:#f8fafc}
+.aviso-abas{background:#fff4e8;border:1px solid #f3c89a;border-left:4px solid var(--laranja,#E8710A);color:#7a3a06;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.45}
+.aviso-abas b{color:#C2560C}
+.dados span.neg{color:var(--laranja-texto);font-weight:600}
+.dados .tab-seg td{white-space:normal}
 .dados h2{margin-top:18px}.dados h2:first-child{margin-top:0}
 .dados ol{margin:6px 0 4px;padding-left:24px;line-height:1.5;font-size:13.5px;color:#1e293b}
 .dados ol li{margin:7px 0}.dados ol li b{color:var(--marinho)}
@@ -254,7 +258,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.31</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.32</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -308,6 +312,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
   </section>
 
   <section id="view-resumo" hidden>
+    <div class="aviso-abas" id="avisoAbas" hidden></div>
     <div class="kpis-grid" id="kpis"></div>
 
     <div class="card">
@@ -633,6 +638,8 @@ class Store {
     this.rFa = new G(Float64Array, 1 << 20); this.rFe = new G(Float64Array, 1 << 20);
     this.rQa = new G(Int32Array, 1 << 20); this.rQe = new G(Int32Array, 1 << 20); this.rEt = new G(Int32Array, 1 << 20);
     this.rUlt = new G(Uint8Array, 1 << 20); this.lastUlt = new G(Uint8Array);
+    // aba de cada linha e meses de cada aba (v1.32): avisa quando o mesmo mês da mesma matrícula vem de abas diferentes
+    this.rAba = new G(Uint16Array, 1 << 20); this.abaIdx = 0; this.abaNomes = []; this.mesAba = {};
     this.stats = { linhas: 0, naoUltimo: 0, repetidas: 0, semRef: 0, abas: [], ignoradas: [] };
   }
   add(c, h){
@@ -657,7 +664,8 @@ class Store {
     }
     let ri = this.refMap.get(rk); if (ri === undefined){ ri = this.refMap.size; this.refMap.set(rk, ri); }
     const g = c[h.grp];
-    this.rMat.push(mi); this.rRef.push(ri); this.rUlt.push(ult);
+    this.rMat.push(mi); this.rRef.push(ri); this.rUlt.push(ult); this.rAba.push(this.abaIdx);
+    this.mesAba[rk] = (this.mesAba[rk] || 0) + 1;
     this.rGrp.push(g == null || g === '' ? -1 : Math.round(toNum(g)));
     this.rTipo.push(this.d.tipo.id(str(c[h.tipo])));
     this.rFa.push(toNum(c[h.fa])); this.rFe.push(toNum(c[h.fe]));
@@ -676,16 +684,19 @@ class Store {
     // Grupo e tipo vêm da linha do último contrato (SIM); entre contratos iguais, a de mais economias do serviço.
     // sel guarda essa linha, que era a única usada até a v1.28: os meses com mais de um contrato saem em mJ com os
     // valores da regra antiga, para a comparação antes/depois da aba Dados
-    const sel = new Int32Array(N).fill(-1), nC = new Uint8Array(N), bits = new Uint8Array(N);
+    const sel = new Int32Array(N).fill(-1), nC = new Uint8Array(N), bits = new Uint8Array(N), abaJ = new Uint16Array(N), AB = this.rAba.a, dupAb = new Map();
     for (let i = 0; i < n; i++){
       const j = A[i] * nR + remap[R[i]], s = sel[j];
       bits[j] |= U[i] ? 1 : 2;
       if (s < 0){
-        sel[j] = i; present[j] = 1; nC[j] = 1; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i];
+        sel[j] = i; present[j] = 1; nC[j] = 1; grp[j] = this.rGrp.a[i]; tipo[j] = this.rTipo.a[i]; abaJ[j] = AB[i] + 1;
         fa[j] = this.rFa.a[i]; fe[j] = this.rFe.a[i]; qa[j] = this.rQa.a[i]; qe[j] = this.rQe.a[i]; et[j] = this.rEt.a[i];
         continue;
       }
       this.stats.repetidas++; if (nC[j] < 255) nC[j]++;
+      if (AB[i] + 1 !== abaJ[j]){                         // mesma matrícula e mês em outra aba: provável mês repetido
+        const key = remap[R[i]] + '|' + (abaJ[j] - 1) + '|' + AB[i]; dupAb.set(key, (dupAb.get(key) || 0) + 1);
+      }
       fa[j] += this.rFa.a[i]; fe[j] += this.rFe.a[i];
       if (this.rQa.a[i] > qa[j]) qa[j] = this.rQa.a[i];
       if (this.rQe.a[i] > qe[j]) qe[j] = this.rQe.a[i];
@@ -697,6 +708,8 @@ class Store {
     const m = mJ.length, mQa = new Int32Array(m), mQe = new Int32Array(m), mFa = new Float64Array(m), mFe = new Float64Array(m), mN = new Uint8Array(m);
     mJ.forEach((j, x) => { const s = sel[j]; mQa[x] = this.rQa.a[s]; mQe[x] = this.rQe.a[s]; mFa[x] = this.rFa.a[s]; mFe[x] = this.rFe.a[s]; mN[x] = nC[j]; });
     this.stats.multi = m;
+    this.stats.dupAbas = [...dupAb].map(([key, n]) => { const [r, a, b] = key.split('|').map(Number); return { ref: refs[r], a: this.abaNomes[a], b: this.abaNomes[b], n }; })
+      .sort((x, y) => x.ref.localeCompare(y.ref) || y.n - x.n);
     const multi = { j: Int32Array.from(mJ), qa: mQa, qe: mQe, fa: mFa, fe: mFe, n: mN };
     return {
       refs, mats: this.mats, nomes: this.nomes,
@@ -1042,6 +1055,7 @@ async function processFiles(files, servico){
     for (const sh of sheets){
       let header = null, seen = 0;
       const before = S.stats.linhas;
+      S.abaIdx = S.abaNomes.push(`${file.name} / ${sh.name}`) - 1; S.mesAba = {};
       const msg = () => `Aba “${sh.name}”: ${S.stats.linhas.toLocaleString('pt-BR')} linhas lidas no total`;
       await streamBlocks(file, sh.entry, '</row>', blk => {
         seen++;
@@ -1057,7 +1071,7 @@ async function processFiles(files, servico){
         if (lista) lista.add(c, header); else S.add(c, header);
       }, p => progress(label, lista ? `Lista de comparação “${file.name}”` : msg(), p));
       if (lista) continue;
-      if (header) S.stats.abas.push({ arquivo: file.name, aba: sh.name, linhas: S.stats.linhas - before });
+      if (header) S.stats.abas.push({ arquivo: file.name, aba: sh.name, linhas: S.stats.linhas - before, meses: S.mesAba });
       else S.stats.ignoradas.push(file.name + ' / ' + sh.name);
     }
   }
@@ -1083,7 +1097,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.31';
+const VERSAO_SITE = '1.32';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1697,6 +1711,7 @@ function renderResumo(){
     (s.ignoradas.length ? ` Arquivos não reconhecidos como fatura ou consumo, ignorados: ${s.ignoradas.join(', ')}.` : ''));
   renderCmpFat();
   renderCad();
+  avisoAbas();
   traduzTela();
 }
 // Conferências do cadastro de dez/25 com o faturamento de dez/25 (regra 20 da aba Dados). Respeitam os filtros de cidade
@@ -2333,6 +2348,47 @@ function exportDiagAtivas(){
   });
   baixa(['\ufeff' + head.join(';') + '\r\n' + rows.join('\r\n') + '\r\n'], `diagnostico_recuperadas_${ARQ()}.csv`);
 }
+/* ---------- abas lidas e meses repetidos entre abas (v1.32) ----------
+   Cada aba diz quais meses (Referência) trouxe. Se a mesma matrícula e mês vierem de abas ou arquivos diferentes, é
+   provável que um mês tenha sido repetido: as economias não dobram (vale a maior), mas o faturamento é somado. */
+const lblAba = t => esc(String(t).replace(' / ', ' › '));
+function mesesPorAba(d){
+  const por = new Map();
+  (d.stats.abas || []).forEach(a => Object.keys(a.meses || {}).forEach(rk => (por.get(rk) || por.set(rk, []).get(rk)).push(a)));
+  return por;
+}
+function avisoAbas(){
+  const el = $('#avisoAbas'), s = D && D.stats;
+  const dup = s && s.dupAbas || [];
+  el.hidden = !dup.length;
+  if (!dup.length) return;
+  const porMes = new Map(); dup.forEach(x => (porMes.get(x.ref) || porMes.set(x.ref, []).get(x.ref)).push(x));
+  el.innerHTML = `⚠ <b>Mês repetido em mais de uma aba ou arquivo.</b> ` + [...porMes].map(([rk, l]) =>
+    `${refLabel(rk)}: ${nf0.format(l.reduce((t, x) => t + x.n, 0))} matrículas aparecem em ${l.map(x => `“${lblAba(x.a)}” e “${lblAba(x.b)}”`).join('; ')}`).join(' · ') +
+    `. As economias não dobram (vale a maior), mas o <b>faturamento dessas matrículas está sendo somado</b>. Confira a aba Dados e tire o mês repetido de uma das abas (ou a cópia do arquivo) e clique em ↻ Atualizar.`;
+}
+function htmlAbas(){
+  if (!D) return '<p class="nota-secao">Carregue a base para ver as abas lidas.</p>';
+  const s = D.stats;
+  if (s.fonteFat) return '<p class="nota-secao">Os arquivos do faturamento são lidos por arquivo (fatura e um consumo por mês); escolha a Base do estudo para ver as abas.</p>';
+  const abas = s.abas || [];
+  if (!abas.length || !abas[0].meses) return '<p class="nota-secao"><b>A base guardada no navegador foi lida por uma versão anterior.</b> Clique em ↻ Atualizar para ver os meses de cada aba.</p>';
+  const por = mesesPorAba(D), dup = s.dupAbas || [];
+  let h = `<p class="nota-secao">Painel ${T('esgoto')}: ${nf0.format(abas.length)} aba(s) lidas. O mês de cada linha vem da coluna Referência, nunca do nome da aba; abas novas entram sozinhas, desde que tenham o cabeçalho com NUM_LIGACAO nas 30 primeiras linhas.</p>` +
+    `<table class="tab-seg"><thead><tr><th>Arquivo</th><th>Aba</th><th>Linhas</th><th>Meses na aba (linhas)</th></tr></thead><tbody>` +
+    abas.map(a => `<tr><td>${esc(a.arquivo)}</td><td>${esc(a.aba)}</td><td>${nf0.format(a.linhas)}</td><td>${Object.keys(a.meses).sort().map(rk => {
+      const varias = por.get(rk).length > 1;
+      return `<span${varias ? ' class="neg" title="Este mês também aparece em outra aba"' : ''}>${refLabel(rk)} (${nf0.format(a.meses[rk])})</span>`;
+    }).join(', ')}</td></tr>`).join('') + '</tbody></table>';
+  const emVarias = [...por].filter(([, l]) => l.length > 1).sort((a, b) => a[0].localeCompare(b[0]));
+  if (!emVarias.length) return h + '<p class="nota-secao">✓ Cada mês vem de uma aba só.</p>';
+  return h + `<table class="tab-seg"><thead><tr><th>Mês em mais de uma aba</th><th>Abas</th><th>Matrículas repetidas entre as abas</th><th>O que fazer</th></tr></thead><tbody>` +
+    emVarias.map(([rk, l]) => {
+      const n = dup.filter(x => x.ref === rk).reduce((t, x) => t + x.n, 0);
+      return `<tr><td>${refLabel(rk)}</td><td>${l.map(a => lblAba(a.arquivo + ' / ' + a.aba)).join('<br>')}</td><td>${nf0.format(n)}</td>` +
+        `<td>${n ? '<span class="neg">Mês repetido: o faturamento dessas matrículas está somado. Tire o mês de uma das abas.</span>' : 'Mês dividido entre abas, sem matrículas repetidas: não afeta os números.'}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
 /* ---------- aba Dados: as regras usadas no painel ----------
    Toda mudança de regra ou de cálculo tem de ser escrita aqui também, na mesma versão (pedido do usuário). */
 function renderDados(){
@@ -2353,6 +2409,9 @@ function renderDados(){
   <h2>Arquivos em uso</h2>
   <ul>${arq('Cadastro de dez/25', C)}${arq('Base do estudo · esgoto', DS.esgoto)}${arq('Base do estudo · água', DS.agua)}${arq('Arquivos do faturamento', DS.fat_esgoto || DS.fat_agua)}</ul>
 
+  <h2>Abas lidas e meses de cada aba</h2>
+  ${htmlAbas()}
+
   <h2>Diagnóstico: recuperadas</h2>
   ${htmlDiagAtivas()}
 
@@ -2362,7 +2421,7 @@ function renderDados(){
   <h2>1. De onde vêm os dados</h2>
   <ol>
     ${li('<b>Pasta conectada.</b> Subpastas: <b>Esgoto</b> (base do estudo de esgoto e listas “Virar”), <b>Água</b> (base do estudo de água), <b>Faturamento</b> (fatura e consumo do painel de faturamento) e <b>Cadastro</b> (cadastro de dez/25). Arquivos que começam com ~$ são ignorados.')}
-    ${li('<b>Base do estudo.</b> Uma linha por matrícula e mês (Referência), com Qtd_eco_fat_esgoto, Qtd_eco_fat_agua, Faturamento_bruto_direta_esgoto, Faturamento_bruto_direta_agua e Eco_total. Entram todos os contratos da matrícula. <b>Mais de um contrato da mesma matrícula no mesmo mês</b> (troca de titularidade, desde a v1.29): a matrícula fatura no mês se qualquer contrato faturou; as economias são o maior número entre os contratos (não duplica) e o faturamento é a soma dos contratos. Nome, situação e grupo de leitura vêm do contrato mais recente (ULTIMO_CONTRATO = SIM); a coluna Último contrato do mês mostra “SIM + NÃO”. <span class=\"ex\">Ex.: em dez/25, contrato encerrado faturou 1 economia e o novo contrato (SIM) veio com 0 → a matrícula faturou 1 em dez/25. Até a v1.28 valia só a linha do último contrato, e ela aparecia sem faturar.</span> O TIPO_FATURAMENTO desta base é o tipo de hoje e não entra em nenhuma conta.')}
+    ${li('<b>Base do estudo.</b> Uma linha por matrícula e mês (Referência), com Qtd_eco_fat_esgoto, Qtd_eco_fat_agua, Faturamento_bruto_direta_esgoto, Faturamento_bruto_direta_agua e Eco_total. Entram todos os contratos da matrícula. <b>Mais de um contrato da mesma matrícula no mesmo mês</b> (troca de titularidade, desde a v1.29): a matrícula fatura no mês se qualquer contrato faturou; as economias são o maior número entre os contratos (não duplica) e o faturamento é a soma dos contratos. Nome, situação e grupo de leitura vêm do contrato mais recente (ULTIMO_CONTRATO = SIM); a coluna Último contrato do mês mostra “SIM + NÃO”. <span class=\"ex\">Ex.: em dez/25, contrato encerrado faturou 1 economia e o novo contrato (SIM) veio com 0 → a matrícula faturou 1 em dez/25. Até a v1.28 valia só a linha do último contrato, e ela aparecia sem faturar.</span> O TIPO_FATURAMENTO desta base é o tipo de hoje e não entra em nenhuma conta. <b>Abas:</b> todas as abas de todos os arquivos são lidas (inclusive ocultas, em qualquer ordem); a aba precisa ter o cabeçalho com NUM_LIGACAO nas 30 primeiras linhas, e o mês de cada linha vem da coluna Referência, nunca do nome da aba. Se a mesma matrícula e mês vierem de abas ou arquivos diferentes, o painel avisa no Resumo (provável mês repetido: o faturamento seria somado duas vezes).')}
     ${li('<b>Arquivos do faturamento.</b> Fatura: só as rubricas VALOR DE AGUA e VALOR DE ESGOTO, no mês da Referencia de Leitura; o faturamento do mês é a soma do Valor Parcela. Consumo: um arquivo por mês, com o mês no nome. Economias da ligação no mês = Residencial + Comercial + Industrial + Pública do consumo, quando o Consumo Faturado é maior que 0 e a fatura tem a rubrica do serviço. Cada ligação conta uma vez por mês (o painel de faturamento soma por linha de fatura; essa conta aparece só na comparação).')}
     ${li('<b>Cadastro de dez/25.</b> Foto de dezembro de 2025, uma linha por matrícula. Economias do cadastro = QTD_ECO_RES + QTD_ECO_COM + QTD_ECO_IND + QTD_ECO_PUB (sem Outros). <b>Desde a v1.31 o cadastro serve só para saber se a matrícula já estava na base</b> (recuperada) ou não (nova): a situação da ligação (SIT_LIG) não entra nas contas, porque traz muitas informações desencontradas — a única exceção é PROVISÓRIA, que conta como nova. O TIPO_FATURAMENTO do cadastro (dez/25) continua dizendo se a ligação faturava só água ou água e esgoto. As economias do cadastro limitam quanto conta como recuperada (regra 10).')}
     ${li('<b>Listas “Virar para Água e Esgoto”</b> (só no esgoto): servem só para comparar em que mês cada matrícula começou a faturar. Nunca somam nos totais.')}
