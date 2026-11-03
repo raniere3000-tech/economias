@@ -258,7 +258,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.32</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.33</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -1097,7 +1097,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.32';
+const VERSAO_SITE = '1.33';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -2309,6 +2309,73 @@ function diagAtivas(){
   }
   return out;
 }
+/* ---------- diagnóstico dos aumentos de economias (v1.33, não muda nenhum número) ----------
+   Abre os aumentos (eA) de cada mês por sinais que costumam indicar problema na base: mês com mais de um contrato, economias
+   do serviço maiores que o Eco_total, iguais às do outro serviço, aumento que volta no mês seguinte, tamanho do aumento. */
+let dgAumMes = -1;
+function diagAum(){
+  const nR = D.refs.length, k = keepMask(), Qo = D.servico === 'agua' ? D.qe : D.qa, z = () => new Float64Array(nR);
+  const L = { tot: z(), mat: z(), multi: z(), acimaTot: z(), igualOutro: z(), volta: z(), dez: z(), ano: z(), t1: z(), t2: z(), t6: z() };
+  const lst = [];
+  for (let m = 0; m < D.mats.length; m++){
+    if (!k[m]) continue;
+    const b = m * nR;
+    for (let r = 1; r < nR; r++){
+      const j = b + r, a = D.eA[j]; if (!a) continue;
+      const f = { multi: D.ult && D.ult[j] === 2, acimaTot: D.Q[j] > D.et[j], igualOutro: Qo[j] > 0 && Qo[j] === D.Q[j],
+        volta: r < nR - 1 && D.present[j + 1] && D.Q[j + 1] <= D.Q[j] - a, dez: D.cls[m] === 0 };
+      L.tot[r] += a; L.mat[r]++;
+      for (const c of ['multi', 'acimaTot', 'igualOutro', 'volta']) if (f[c]) L[c][r] += a;
+      (f.dez ? L.dez : L.ano)[r] += a;
+      (a === 1 ? L.t1 : a <= 5 ? L.t2 : L.t6)[r] += a;
+      lst.push({ m, r, a, f });
+    }
+  }
+  return { L, lst };
+}
+function htmlDiagAum(){
+  if (!D) return '<p class="nota-secao">Carregue a base para ver o diagnóstico.</p>';
+  const { L, lst } = diagAum(), nR = D.refs.length, labels = D.refs.map(refLabel), L1 = labels.slice(1);
+  if (dgAumMes < 1 || dgAumMes >= nR) { dgAumMes = 1; for (let r = 1; r < nR; r++) if (L.tot[r] > L.tot[dgAumMes]) dgAumMes = r; }
+  const S = T('esgoto'), linha = (rot, a, cl) => `<tr${cl ? ` class="${cl}"` : ''}><td>${rot}</td>${L1.map((_, i) => `<td>${a ? nf0.format(a[i + 1]) : ''}</td>`).join('')}</tr>`;
+  const pctL = (rot, a) => `<tr class="mudo"><td>${rot}</td>${L1.map((_, i) => `<td>${L.tot[i + 1] ? nf0.format(a[i + 1] / L.tot[i + 1] * 100) + '%' : '–'}</td>`).join('')}</tr>`;
+  let h = `<p class="nota-secao">Painel ${S}, com os filtros de cidade e sub-categoria. Aumento = economias de ${S} acima do teto da matrícula (regra 14). As linhas abaixo mostram, de cada mês, quanto dos aumentos tem cada sinal; um mês fora do padrão costuma ter um sinal muito mais alto que os outros. Uma economia pode ter mais de um sinal.</p>` +
+    `<table class="tab-seg"><thead><tr><th>Aumentos de economias</th>${L1.map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>` +
+    linha('Economias de aumento', L.tot, 'forte') + linha('Matrículas com aumento', L.mat) +
+    linha('· em mês com mais de um contrato (SIM + NÃO)', L.multi) + pctL('  % do mês', L.multi) +
+    linha(`· economias de ${S} maiores que o Eco_total do mês`, L.acimaTot) + pctL('  % do mês', L.acimaTot) +
+    linha(`· economias de ${S} iguais às do outro serviço no mês`, L.igualOutro) + pctL('  % do mês', L.igualOutro) +
+    linha('· que voltam no mês seguinte (o aumento some)', L.volta) + pctL('  % do mês', L.volta) +
+    linha('· de quem já faturava em dez/25', L.dez) + linha('· de quem entrou em 2026 (novas ou recuperadas)', L.ano) +
+    linha('· aumento de 1 economia', L.t1) + linha('· aumento de 2 a 5', L.t2) + linha('· aumento de 6 ou mais', L.t6) + '</tbody></table>' +
+    `<p class="nota-secao">“Voltam no mês seguinte” não se aplica ao último mês da base. Detalhe do mês: <select id="dgAumMes" aria-label="Mês do diagnóstico de aumentos">${L1.map((l, i) => `<option value="${i + 1}"${i + 1 === dgAumMes ? ' selected' : ''}>${l}</option>`).join('')}</select></p>`;
+  const doMes = lst.filter(x => x.r === dgAumMes), totMes = L.tot[dgAumMes];
+  const top = (fn, nome) => {
+    const mp = new Map(); doMes.forEach(x => { const c = fn(x); const v = mp.get(c) || [0, 0]; v[0]++; v[1] += x.a; mp.set(c, v); });
+    return `<table class="tab-seg"><thead><tr><th>${nome}</th><th>Matrículas</th><th>Economias de aumento</th><th>% do mês</th></tr></thead><tbody>` +
+      [...mp].sort((a, b) => b[1][1] - a[1][1]).slice(0, 15).map(([c, v]) => `<tr><td>${esc(c)}</td><td>${nf0.format(v[0])}</td><td>${nf0.format(v[1])}</td><td>${totMes ? nf1.format(v[1] / totMes * 100) + '%' : '–'}</td></tr>`).join('') + '</tbody></table>';
+  };
+  h += top(x => { const g = D.grp[x.m * nR + x.r]; return g < 0 ? '(sem grupo)' : String(g); }, `COD_GRUPO em ${labels[dgAumMes]} (15 maiores)`) +
+    top(x => D.dict.cid[D.cid[x.m]], `Cidade em ${labels[dgAumMes]} (15 maiores)`);
+  return h + (doMes.length ? `<button class="btn-just" type="button" id="btnDiagAum">⬇ Baixar aumentos de ${labels[dgAumMes]}</button>` : '');
+}
+function exportDiagAum(){
+  const { lst } = diagAum(), nR = D.refs.length, labels = D.refs.map(refLabel), C = CAD, Qo = D.servico === 'agua' ? D.qe : D.qa;
+  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const sn = v => v ? 'SIM' : 'NÃO';
+  const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', HC('PRIMEIRO_MES_FATURANDO_ESGOTO'), 'ORIGEM',
+    'ECONOMIAS_AUMENTO', 'TETO_ANTES_DO_MES', HC('ECO_ESGOTO_MES_ANTERIOR'), HC('ECO_ESGOTO_MES'), HC('ECO_ESGOTO_MES_SEGUINTE'), 'Eco_total_MES', HC('ECO_OUTRO_SERVICO_MES').replace('OUTRO_SERVICO', D.servico === 'agua' ? 'ESGOTO' : 'AGUA'),
+    'ULTIMO_CONTRATO_MES', 'COD_GRUPO_MES', 'MAIS_DE_UM_CONTRATO', 'ACIMA_DO_ECO_TOTAL', 'IGUAL_AO_OUTRO_SERVICO', 'VOLTA_NO_MES_SEGUINTE', 'ECO_CADASTRO_DEZ25',
+    ...labels.map(l => HC('ECO_ESGOTO_') + l.replace('/', '_').toUpperCase())];
+  const rows = lst.filter(x => x.r === dgAumMes).map(({ m, r, a, f }) => {
+    const b = m * nR, j = b + r, ci = D.cadI ? D.cadI[m] : -1;
+    return [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], D.pri[m] >= 0 ? labels[D.pri[m]] : '',
+      T(CLS_NOME[D.cls[m]]), a, D.Q[j] - D.ent[j], D.present[j - 1] ? D.Q[j - 1] : '', D.Q[j], r < nR - 1 && D.present[j + 1] ? D.Q[j + 1] : '', D.et[j], Qo[j],
+      cellVal('ult', j, true), cellVal('grp', j, true), sn(f.multi), sn(f.acimaTot), sn(f.igualOutro), r < nR - 1 ? sn(f.volta) : '', ci >= 0 ? C.eco[ci] : '',
+      ...labels.map((_, x) => D.present[b + x] ? D.Q[b + x] : '')].map(q).join(';');
+  });
+  baixa(['\ufeff' + head.join(';') + '\r\n' + rows.join('\r\n') + '\r\n'], `diagnostico_aumentos_${ARQ()}_${D.refs[dgAumMes]}.csv`);
+}
 function htmlDiagAtivas(){
   if (!D) return '<p class="nota-secao">Carregue a base para ver o diagnóstico.</p>';
   if (!CAD) return '<p class="nota-secao">Sem o cadastro de dez/25 não existe o grupo “Recuperadas”.</p>';
@@ -2412,6 +2479,9 @@ function renderDados(){
   <h2>Abas lidas e meses de cada aba</h2>
   ${htmlAbas()}
 
+  <h2>Diagnóstico: aumentos de economias</h2>
+  ${htmlDiagAum()}
+
   <h2>Diagnóstico: recuperadas</h2>
   ${htmlDiagAtivas()}
 
@@ -2471,6 +2541,7 @@ function renderDados(){
   <ol start="24">
     ${li('Todos os arquivos usam ponto e vírgula, vírgula decimal e trazem PRIMEIRO_MES_FATURANDO_ESGOTO logo depois dos dados da matrícula. ORIGEM é o grupo da matrícula pelo cruzamento com o cadastro; SIT_LIG_CADASTRO_DEZ25, TIPO_FATURAMENTO_CADASTRO_DEZ25 e ECO_CADASTRO_DEZ25 vêm do cadastro.')}
     ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO — Nova na base (fora do cadastro ou Provisória), Recuperada, Passou a faturar esgoto ou Aumento de economias — e GRUPO; a situação da ligação no cadastro vem em SIT_LIG_CADASTRO_DEZ25, só para consulta. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também a situação na base em dez/25 (NA_BASE_DEZ25, DIAGNOSTICO_DEZ25, grupo, economias e R$ de água e esgoto), as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
+    ${li('<b>Diagnóstico dos aumentos</b> (aba Dados, não muda nenhum número): por mês, quanto dos aumentos vem de mês com mais de um contrato, de economias do serviço maiores que o Eco_total, iguais às do outro serviço, de aumentos que voltam no mês seguinte, de quem já faturava em dez/25 ou entrou em 2026, e pelo tamanho do aumento; no mês escolhido, os maiores COD_GRUPO e cidades e a lista para baixar.')}
     ${li('<b>Diagnóstico das recuperadas</b> (topo desta aba, não muda nenhum número): abre as matrículas do grupo Recuperadas pela situação na base em dez/25 — ausente da base (a exportação só traz quem teve faturamento no mês, então não houve conta com Referência dez/25), só com o outro serviço faturado, com valor do serviço sem economias, ou com tudo zerado — e mostra essas economias por mês de entrada, por COD_GRUPO do mês de entrada, por cidade e pelo número de meses faturando em 2026, com a lista para baixar (economias do serviço mês a mês).')}
     ${li('<b>Analítico de movimentos:</b> com SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS dá as economias novas faturando do Resumo; ECONOMIAS_NO_GRUPO vai para o GRUPO da linha e ECONOMIAS_AUMENTO para os aumentos; CONTA_COMO_MATRICULA = SIM dá as matrículas novas faturando.')}
   </ol>`;
@@ -2567,10 +2638,12 @@ $('#tblListas').addEventListener('click', e => {
   $('#cMov').value = 'all'; fillMes(); $('#cLista').value = b.dataset.lista; showTab('cons');
 });
 $('#cLista').onchange = () => renderCons(true);
+$('#dadosRegras').addEventListener('change', e => { if (e.target.id === 'dgAumMes'){ dgAumMes = +e.target.value; const y = window.scrollY; renderDados(); window.scrollTo(0, y); } });
 $('#dadosRegras').addEventListener('click', e => {
   if (!D) return;
   if (e.target.closest('#btnAntesDepois')) exportAntesDepois();
   if (e.target.closest('#btnDiagAtivas')) exportDiagAtivas();
+  if (e.target.closest('#btnDiagAum')) exportDiagAum();
 });
 $('#tblCad').addEventListener('click', e => { const b = e.target.closest('[data-conf]'); if (b && D) exportConf(+b.dataset.conf); });
 ligaDica($('#blocoEco')); ligaDica($('#blocoFat'));
