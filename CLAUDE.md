@@ -38,7 +38,6 @@ tests/conferir_totais.py    recalcula os números do Resumo em Python para confe
 tests/gerar_lista_teste.py  gera uma lista "Virar para Água e Esgoto" a partir da base sintética
 tests/gerar_base_contratos_teste.py  acrescenta à base sintética trocas de titularidade em que só o contrato antigo faturou
 tests/gerar_cadastro_teste.py  gera um cadastro de dez/25 sintético a partir da base sintética
-tests/conferir_faturamento.py  totais por mês dos arquivos do painel de faturamento (aba Arquivos do faturamento)
 ```
 
 Publicação: GitHub Pages, branch `main`, pasta raiz. Para atualizar, basta substituir o `index.html`.
@@ -128,6 +127,8 @@ Calculadas em `fluxos(k)`, onde `k` é a máscara dos filtros. A comparação é
 
 ## Aba "Arquivos do faturamento" (v1.25)
 
+- **Retirada na v1.35 (pedido do usuário, 11/11/2026):** "serão considerados apenas os números do BI" (a base do estudo). Saíram o seletor "Base do estudo | Arquivos do faturamento", `DS.fat_*`, `preparaFat()`, `FatStore`/`processFat()` no worker, o cartão de comparação e `tests/conferir_faturamento.py`. A subpasta **Faturamento**, se existir, é **ignorada** na leitura (`pastaFat`), e a chave `fat` antiga do IndexedDB é apagada ao abrir (`idbDelFat()`). `streamCsv()` ficou, porque o cadastro aceita .csv. O texto abaixo é só histórico.
+
 - **Pedido do usuário:** uma aba nova, com os painéis Esgoto e Água, que faz as mesmas contas sobre os arquivos do painel de faturamento (repositório analise-faturamento-agua-esgoto, mesma conta do GitHub) e compara com a base do estudo. Escolhas: "mesmo painel + comparação" e "as mesmas regras de hoje" (água 'teto', esgoto 'mes').
 - **Pasta:** subpasta **Faturamento** dentro da pasta conectada, ao lado de Esgoto e Água, com os mesmos arquivos do painel de faturamento: a fatura e um consumo por mês, com o mês no nome (ex.: "Consumo 12-2025.csv"). Aceita .csv (`;`, UTF-8 ou Latin-1) e .xlsx. Cronograma, RF e "avulso" são ignorados (pelas colunas ou pelo nome). A mesma cópia (nome + tamanho) em duas pastas conta uma vez.
 - **Leitura (worker, `processFat()`, `FatStore`):** fatura = colunas Rubrica, Valor Parcela e Data de Vencimento; vale só VALOR DE AGUA e VALOR DE ESGOTO, no mês da Referencia de Leitura; faturamento = soma do Valor Parcela. Consumo = Leitura Atual, Consumo Medido e Consumo Faturado; mês do nome do arquivo (MM-AAAA ou mes-AA), da pasta ou de Mes/Ano Lancamento. Economias da ligação no mês = Residencial + Comercial + Industrial + Publica, quando o Consumo Faturado > 0 e a fatura tem a rubrica do serviço (`qa`/`qe`), **uma vez por ligação**. O painel de faturamento soma por linha de fatura: isso fica em `qaL`/`qeL`, só para a comparação. Cadastro da fatura mais recente (Nome da Localidade = cidade, Categoria = sub-categoria). `ULTIMO_CONTRATO` = SIM e tipo vazio.
@@ -185,7 +186,6 @@ tests/conferir_totais.py    recalcula os números do Resumo em Python para confe
 tests/gerar_lista_teste.py  gera uma lista "Virar para Água e Esgoto" a partir da base sintética
 tests/gerar_base_contratos_teste.py  acrescenta à base sintética trocas de titularidade em que só o contrato antigo faturou
 tests/gerar_cadastro_teste.py  gera um cadastro de dez/25 sintético a partir da base sintética
-tests/conferir_faturamento.py  totais por mês dos arquivos do painel de faturamento (aba Arquivos do faturamento)
 ```
 
 Publicação: GitHub Pages, branch `main`, pasta raiz. Para atualizar, basta substituir o `index.html`.
