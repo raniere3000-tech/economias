@@ -1,5 +1,5 @@
 """Recalcula em Python, de forma independente, os números do Resumo do painel.
-Uso: python tests/conferir_totais.py [--agua] [--cad cadastro.xlsx] base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
+Uso: python tests/conferir_totais.py [--agua] [--cad cadastro.xlsx] [--ult cadastro_atual.xlsx] base_teste.xlsx ["Julho - Virar para Água e Esgoto.xlsx" ...]
 --agua: confere o painel Água, com Qtd_eco_fat_agua e Faturamento_bruto_direta_agua no lugar das colunas de esgoto.
 --cad: cadastro de dez/25, que define o grupo de quem não faturava em dez/25 (regras 8 a 15 da aba Dados).
 Regra do teto (esgoto e água, v1.26): cada matrícula só soma economias acima do maior número já faturado (o de dez/25
@@ -23,6 +23,21 @@ if '--cad' in sys.argv:
         if r[cc['NUM_LIGACAO']] is None: continue
         eco = sum(int(r[cc[c]] or 0) for c in ('QTD_ECO_COM', 'QTD_ECO_IND', 'QTD_ECO_PUB', 'QTD_ECO_RES'))
         CAD[str(r[cc['NUM_LIGACAO']]).split('.')[0]] = (SIT.get(sem(r[cc['SIT_LIG']]), 4), sem(r[cc['TIPO_FATURAMENTO']]), eco, str(r[cc['SIT_LIG']]).strip())
+# --ult (v1.37): filtro "Só último contrato (SIM)": só ficam as matrículas com ULTIMO_CONTRATO = SIM (em alguma linha)
+# no cadastro atual; as com NÃO e as fora dele saem de todos os meses
+ULT = None
+if '--ult' in sys.argv:
+    i = sys.argv.index('--ult'); arq_ult = sys.argv[i + 1]; del sys.argv[i:i + 2]; ULT = set()
+    import unicodedata as _u2
+    for ws in load_workbook(arq_ult, read_only=True).worksheets:
+        cu = None
+        for r in ws.iter_rows(values_only=True):
+            if cu is None:
+                nomes = [_u2.normalize('NFD', str(c or '')).encode('ascii', 'ignore').decode().strip().upper() for c in r]
+                if 'NUM_LIGACAO' in nomes: cu = (nomes.index('NUM_LIGACAO'), nomes.index('ULTIMO_CONTRATO'))
+                continue
+            if r[cu[0]] is not None and _u2.normalize('NFD', str(r[cu[1]] or '')).encode('ascii', 'ignore').decode().strip().upper() == 'SIM':
+                ULT.add(str(r[cu[0]]).split('.')[0])
 COL_Q = 'Qtd_eco_fat_agua' if AGUA else 'Qtd_eco_fat_esgoto'
 COL_F = 'Faturamento_bruto_direta_agua' if AGUA else 'Faturamento_bruto_direta_esgoto'
 arq = sys.argv[1] if len(sys.argv) > 1 else 'base_teste.xlsx'
@@ -40,6 +55,7 @@ for ws in wb.worksheets:
         # todos os contratos entram; com mais de um contrato da matrícula no mesmo mês (v1.29): economias = o maior
         # número entre os contratos, faturamento = soma dos contratos
         d = g('Referência'); k = (d.year, d.month); refs.add(k); m = g('NUM_LIGACAO')
+        if ULT is not None and str(m).split('.')[0] not in ULT: refs_ult = None; continue
         if (m, k) in prio:
             repetidas += 1; multi.add((m, k))
         else:

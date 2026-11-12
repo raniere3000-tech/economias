@@ -15,13 +15,15 @@ Conecte a pasta que tem as subpastas **Esgoto** e **Água**. A base de esgoto (e
 
 A subpasta **Cadastro** recebe o cadastro de dez/25. Ele define o grupo de cada matrícula que não faturava em dez/25 (novas na base, recuperadas inativas/desativadas, cortadas ou ativas sem faturar e, no esgoto, as que passaram a faturar esgoto) e alimenta o cartão de conferências. As regras completas ficam na aba **Dados** do painel.
 
+A mesma subpasta pode ter também o **cadastro atual** (ex.: `Base Cadastro - 11.11.2026.xlsx`, com a coluna ULTIMO_CONTRATO). O arquivo com "dez" ou "2025" no nome é o de dez/25; o outro é o atual. Com o cadastro atual carregado, aparece o botão **Só último contrato (SIM)**: ligado, saem de toda a contagem as matrículas que no cadastro atual estão com ULTIMO_CONTRATO = NÃO ou que não estão nele.
+
 A aba **Arquivos do faturamento** foi retirada na v1.35: o painel usa só a base do estudo (os números do BI). Se existir uma subpasta Faturamento, ela é ignorada.
 
 ```
 Nova pasta/
   Esgoto/        base de esgoto e listas "Virar"
   Água/          base de água
-  Cadastro/      cadastro de dez/25 (Base_Cadastro_Dezembro-2025.xlsx)
+  Cadastro/      cadastro de dez/25 (Base_Cadastro_Dezembro-2025.xlsx) e cadastro atual (Base Cadastro - 11.11.2026.xlsx)
 ```
 
 ## Listas de comparação
