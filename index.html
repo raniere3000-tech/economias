@@ -115,7 +115,8 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .lt.lt-fat .lt-val{font-size:18px}
 .lt-val{font-family:var(--fonte-cond);font-size:24px;font-weight:700;color:var(--marinho);line-height:1.15;font-variant-numeric:tabular-nums}
 .lt-rot{font-size:11.5px;color:var(--azul-claro);line-height:1.3}
-.lt-det span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lt-det span{display:block}
+.lt-col p,.lt-det span{overflow-wrap:anywhere;word-break:normal}   /* em telas menores o texto quebra, sem invadir a coluna vizinha */
 .lt-det{font-size:11.5px;color:#334155;line-height:1.35;margin-top:6px;font-variant-numeric:tabular-nums}
 .lt-sep{border-top:1px solid var(--linha);margin:8px 0}
 .lt-k{font-size:11px;color:var(--azul-claro);line-height:1.25}
@@ -252,7 +253,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.35</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.36</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -334,6 +335,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
           </select></label>
           <select id="anMes" class="sel-mes" aria-label="Mês do analítico"></select>
           <button class="btn-just" id="btnAnalitico" type="button" title="Uma linha por matrícula e mês com movimento de esgoto, com os filtros de cidade e sub-categoria">⬇ Baixar analítico</button>
+          <button class="btn-just" id="btnMetas" type="button" title="Excel com a aba Resumo gerencial (com a meta para digitar) e a aba Matrículas: uma linha por matrícula que entrou ou aumentou economias em 2026">⬇ Base de metas (Excel)</button>
         </div>
       </div>
       <div class="legenda" id="legEco"></div>
@@ -921,7 +923,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.35';
+const VERSAO_SITE = '1.36';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1836,6 +1838,155 @@ function baixa(parts, nome){
   const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+/* ---------- gerador de .xlsx sem bibliotecas (v1.36): zip sem compressão com as partes mínimas do Excel ---------- */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = u => { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC_T[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function zipStore(files){
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  for (const f of files){
+    const nm = enc.encode(f.name), d = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(d);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(12, 0x21, true);
+    h.setUint32(14, crc, true); h.setUint32(18, d.length, true); h.setUint32(22, d.length, true); h.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(h.buffer), nm, d);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, 0x21, true);
+    c.setUint32(16, crc, true); c.setUint32(20, d.length, true); c.setUint32(24, d.length, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), nm);
+    off += 30 + nm.length + d.length;
+  }
+  const cd = central.reduce((t, x) => t + x.length, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cd, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+const colL = n => { let s = ''; for (n++; n; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
+const xEsc = v => String(v).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// estilos: 0 normal, 1 cabeçalho, 2 inteiro, 3 R$, 4 %, 5 título, 6 célula para digitar, 7 negrito, 8 total (inteiro), 9 total (%), 10 nota
+const XS = { cab: 1, int: 2, rs: 3, pct: 4, tit: 5, input: 6, neg: 7, totInt: 8, totPct: 9, nota: 10 };
+const XLSX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+  `<numFmts count="3"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="#,##0.00"/><numFmt numFmtId="166" formatCode="0.0%"/></numFmts>` +
+  `<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FF102840"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF64748B"/><name val="Calibri"/></font></fonts>` +
+  `<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF102840"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF4CC"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7F0F6"/></patternFill></fill></fills>` +
+  `<borders count="2"><border/><border><left style="thin"><color rgb="FFE8710A"/></left><right style="thin"><color rgb="FFE8710A"/></right><top style="thin"><color rgb="FFE8710A"/></top><bottom style="thin"><color rgb="FFE8710A"/></bottom></border></borders>` +
+  `<cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="11"><xf/>` +
+  `<xf fontId="3" fillId="2" applyFont="1" applyFill="1"><alignment wrapText="1" vertical="center"/></xf>` +
+  `<xf numFmtId="164" applyNumberFormat="1"/><xf numFmtId="165" applyNumberFormat="1"/><xf numFmtId="166" applyNumberFormat="1"/>` +
+  `<xf fontId="2" applyFont="1"/><xf numFmtId="164" fontId="1" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>` +
+  `<xf fontId="1" applyFont="1"/><xf numFmtId="164" fontId="1" fillId="4" applyNumberFormat="1" applyFont="1" applyFill="1"/>` +
+  `<xf numFmtId="166" fontId="1" fillId="4" applyNumberFormat="1" applyFont="1" applyFill="1"/><xf fontId="4" applyFont="1"/></cellXfs></styleSheet>`;
+// planilha: rows = [[célula]], célula = número, texto, null ou { v, s, f } (f = fórmula, calculada ao abrir)
+function sheetXml(sh){
+  const lin = sh.rows.map((row, i) => `<row r="${i + 1}">` + row.map((c, j) => {
+    if (c == null || c === '') return '';
+    const o = typeof c === 'object' ? c : { v: c }, ref = colL(j) + (i + 1), st = o.s ? ` s="${o.s}"` : '';
+    if (o.f) return `<c r="${ref}"${st}><f>${xEsc(o.f)}</f></c>`;
+    if (o.v == null || o.v === '') return o.s ? `<c r="${ref}"${st}/>` : '';
+    if (typeof o.v === 'number' && isFinite(o.v)) return `<c r="${ref}"${st}><v>${o.v}</v></c>`;
+    return `<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${xEsc(o.v)}</t></is></c>`;
+  }).join('') + '</row>').join('');
+  const nC = Math.max(1, ...sh.rows.map(r => r.length));
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<sheetViews><sheetView workbookViewId="0">${sh.freeze ? `<pane ySplit="${sh.freeze}" topLeftCell="A${sh.freeze + 1}" activePane="bottomLeft" state="frozen"/>` : ''}</sheetView></sheetViews>` +
+    (sh.cols ? `<cols>${sh.cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` : '') +
+    `<sheetData>${lin}</sheetData>` + (sh.filtro ? `<autoFilter ref="A${sh.filtro}:${colL(nC - 1)}${sh.rows.length}"/>` : '') + `</worksheet>`;
+}
+function baixaXlsx(sheets, nome){
+  const wb = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>` +
+    sheets.map((sh, i) => `<sheet name="${xEsc(sh.nome)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + `</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+    sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+    `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>` +
+    `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+    sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + `</Types>`;
+  const blob = zipStore([
+    { name: '[Content_Types].xml', data: ct },
+    { name: '_rels/.rels', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+    { name: 'xl/workbook.xml', data: wb }, { name: 'xl/_rels/workbook.xml.rels', data: rels }, { name: 'xl/styles.xml', data: XLSX_STYLES },
+    ...sheets.map((sh, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXml(sh) }))
+  ]);
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+// Base de metas (v1.36, pedido do usuário): Excel com a aba "Resumo gerencial" (meta anual para digitar, % atingido,
+// meses, grupos e cidades) e a aba "Matrículas" (uma linha por matrícula que somou economias em 2026, com o mês e o
+// motivo da entrada, os aumentos, as colunas da base no mês da entrada e no último mês). Respeita os filtros.
+async function exportMetas(){
+  const k = keepMask(), nR = D.refs.length, L = nR - 1, labels = D.refs.map(refLabel), o = fluxos(k), C = CAD;
+  const S = T('esgoto'), GRs = gruposAtivos(), meses = labels.slice(1);
+  bloqueia(true); prog(true, 'Gerando a base de metas', 'Montando as abas Resumo gerencial e Matrículas…', 0.2);
+  await new Promise(res => setTimeout(res));
+  // aba Matrículas
+  const fat = (f, j) => D.present[j] ? (f === 'ult' ? cellVal('ult', j, true) : f === 'grp' ? (D.grp[j] < 0 ? '' : D.grp[j]) : f === 'tipo' ? D.dict.tipo[D.tipo[j]] : f === 'fa' || f === 'fe' ? { v: D[f][j], s: XS.rs } : D[f][j]) : '';
+  const head = ['NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', HC('PRIMEIRO_MES_FATURANDO_ESGOTO'),
+    'MES_ENTRADA', 'MOTIVO_ENTRADA', 'GRUPO_ENTRADA', 'ECONOMIAS_ENTRADA', 'MESES_COM_AUMENTO', 'ECONOMIAS_AUMENTO', HC('ECONOMIAS_NOVAS_2026'),
+    ...meses.map(l => 'NOVAS_' + l.replace('/', '_').toUpperCase()), 'ORIGEM', HC('ECO_ESGOTO_DEZ25'),
+    ...FIELDS.map(f => f.h + '_MES_ENTRADA'), ...FIELDS.map(f => f.h + '_ULTIMO_MES'),
+    'SIT_LIG_CADASTRO_DEZ25', 'TIPO_FATURAMENTO_CADASTRO_DEZ25', 'ECO_CADASTRO_DEZ25', 'LISTAS_VIRAR'];
+  const rowsM = [head.map(h => ({ v: h, s: XS.cab }))];
+  const cidMat = new Map();
+  for (const m of D.ordMat){
+    if (!k[m] || D.ligMes[m] < 0) continue;
+    const b = m * nR, r0 = D.ligMes[m], j0 = b + r0, ci = D.cadI ? D.cadI[m] : -1;
+    const cat = D.cat[j0], grupo = cat === G_AUM ? G_AUM : cat, ecoG = cat === G_AUM ? D.ent[j0] : D.ent[j0] - D.eA[j0];
+    const aum = []; let ecoA = 0;
+    for (let r = 1; r < nR; r++){ const a = D.eA[b + r]; if (a){ ecoA += a; aum.push(`${labels[r]} (+${a})`); } }
+    const porMes = meses.map((_, i) => D.ent[b + i + 1] || '');
+    rowsM.push([/^\d{1,15}$/.test(D.mats[m]) ? +D.mats[m] : D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]], D.pri[m] >= 0 ? labels[D.pri[m]] : '',
+      labels[r0], motivo(m, grupo), grupoNome(grupo), cat === G_AUM ? 0 : ecoG, aum.join(', '), ecoA, D.ecoNov[m], ...porMes,
+      T(CLS_NOME[D.cls[m]]), D.present[b] ? D.Q[b] : 0, ...FIELDS.map(f => fat(f.k, j0)), ...FIELDS.map(f => fat(f.k, b + L)),
+      ci >= 0 ? C.dict.slTxt[C.slTxt[ci]] : C ? 'Fora do cadastro' : '', ci >= 0 ? C.dict.tipo[C.tipo[ci]] : '', ci >= 0 ? C.eco[ci] : '', listasDe(m)]);
+    const cn = D.dict.cid[D.cid[m]]; cidMat.set(cn, (cidMat.get(cn) || 0) + 1);
+  }
+  prog(true, null, null, 0.6); await new Promise(res => setTimeout(res));
+  // aba Resumo gerencial
+  const total = sumFrom1(o.ent), mats = sumFrom1(o.lig), filtros = [st.cidSel ? `cidades: ${[...st.cidSel].map(i => D.dict.cid[i]).join(', ')}` : '', st.subSel ? `sub-categorias: ${[...st.subSel].map(i => D.dict.sub[i]).join(', ')}` : ''].filter(Boolean).join('; ');
+  const R = [], add = r => { R.push(r); return R.length; };
+  add([{ v: `Entradas de economias de ${S} 2026 — resumo gerencial`, s: XS.tit }]);
+  add([{ v: `Gerado em ${new Date().toLocaleDateString('pt-BR')} pelo painel v${VERSAO_SITE}, ${labels[1]} a ${labels[L]}${filtros ? ' · filtros: ' + filtros : ' · sem filtros'}. Regras completas na aba Dados do painel.`, s: XS.nota }]);
+  add([]);
+  const rMeta = add([{ v: `Meta anual de economias novas faturando ${S} (digite)`, s: XS.neg }, { v: '', s: XS.input }]);
+  const rTot = add([`Economias novas faturando ${S} em 2026 (${labels[1]} a ${labels[L]})`, { v: total, s: XS.int }]);
+  add(['% da meta atingido', { f: `IF(B${rMeta}>0,B${rTot}/B${rMeta},"")`, s: XS.pct }]);
+  add(['Falta para a meta', { f: `IF(B${rMeta}>0,MAX(B${rMeta}-B${rTot},0),"")`, s: XS.int }]);
+  const rProp = add([`Meta proporcional até ${labels[L]} (meta ÷ 12 × ${L} meses)`, { f: `IF(B${rMeta}>0,B${rMeta}/12*${L},"")`, s: XS.int }]);
+  add([`% da meta proporcional até ${labels[L]}`, { f: `IF(B${rMeta}>0,B${rTot}/B${rProp},"")`, s: XS.pct }]);
+  add([`Matrículas novas faturando ${S} em 2026`, { v: mats, s: XS.int }]);
+  add([]);
+  add([{ v: 'Economias novas faturando por mês', s: XS.neg }]);
+  const cab = ['Mês', ...GRs.map(g => GRUPOS[g].eco), 'Total no mês', 'Acumulado', '% da meta (acumulado)', 'Matrículas no mês', 'Matrículas acumuladas', 'Deixaram de faturar (só informação)'];
+  add(cab.map(h => ({ v: T(h), s: XS.cab })));
+  const r1 = R.length + 1; let acc = 0, accM = 0;
+  for (let r = 1; r < nR; r++){
+    acc += o.ent[r]; accM += o.lig[r];
+    const lr = R.length + 1, cAcc = colL(GRs.length + 2);
+    add([labels[r], ...GRs.map(g => ({ v: o.eC[g][r], s: XS.int })), { v: o.ent[r], s: XS.int }, { v: acc, s: XS.int },
+      { f: `IF($B$${rMeta}>0,${cAcc}${lr}/$B$${rMeta},"")`, s: XS.pct }, { v: o.lig[r], s: XS.int }, { v: accM, s: XS.int }, { v: o.sai[r] + o.red[r], s: XS.int }]);
+  }
+  const r2 = R.length, cTot = colL(GRs.length + 1);
+  add([{ v: 'Total 2026', s: XS.neg }, ...GRs.map((_, i) => ({ f: `SUM(${colL(i + 1)}${r1}:${colL(i + 1)}${r2})`, s: XS.totInt })), { f: `SUM(${cTot}${r1}:${cTot}${r2})`, s: XS.totInt }, { v: '', s: XS.totInt },
+    { f: `IF($B$${rMeta}>0,${cTot}${r2 + 1}/$B$${rMeta},"")`, s: XS.totPct }, { f: `SUM(${colL(GRs.length + 4)}${r1}:${colL(GRs.length + 4)}${r2})`, s: XS.totInt }, { v: '', s: XS.totInt },
+    { f: `SUM(${colL(GRs.length + 6)}${r1}:${colL(GRs.length + 6)}${r2})`, s: XS.totInt }]);
+  add([]);
+  add([{ v: 'Economias novas faturando por cidade', s: XS.neg }]);
+  add(['Cidade', ...meses, 'Total 2026', '% do total', 'Matrículas'].map(h => ({ v: h, s: XS.cab })));
+  const cids = [...o.cidUsed.keys()].filter(c => o.cidUsed[c]).map(c => { let t = 0; for (let r = 1; r < nR; r++) t += o.cidE[c * nR + r]; return { c, t }; }).filter(x => x.t > 0).sort((a, b) => b.t - a.t);
+  const c1 = R.length + 1;
+  cids.forEach(({ c, t }) => add([D.dict.cid[c], ...meses.map((_, i) => ({ v: o.cidE[c * nR + i + 1], s: XS.int })), { v: t, s: XS.int }, { v: total ? t / total : 0, s: XS.pct }, { v: cidMat.get(D.dict.cid[c]) || 0, s: XS.int }]));
+  const c2 = R.length;
+  add([{ v: 'Total', s: XS.neg }, ...meses.map((_, i) => ({ f: `SUM(${colL(i + 1)}${c1}:${colL(i + 1)}${c2})`, s: XS.totInt })), { f: `SUM(${colL(meses.length + 1)}${c1}:${colL(meses.length + 1)}${c2})`, s: XS.totInt }, { v: 1, s: XS.totPct },
+    { f: `SUM(${colL(meses.length + 3)}${c1}:${colL(meses.length + 3)}${c2})`, s: XS.totInt }]);
+  add([]);
+  add([{ v: `Como ler: economias novas faturando = novas na base + recuperadas${D.servico === 'esgoto' ? ' + que passaram a faturar esgoto' : ''} + aumentos (só o que passa do maior número de economias já faturado pela matrícula). As que deixaram de faturar não são descontadas. A aba Matrículas tem uma linha por matrícula; a soma de ${HC('ECONOMIAS_NOVAS_2026')} é o total acima, e cada coluna NOVAS_<mês> soma o total do mês.`, s: XS.nota }]);
+  prog(true, null, null, 0.9); await new Promise(res => setTimeout(res));
+  baixaXlsx([
+    { nome: 'Resumo gerencial', rows: R.map(r => r.map(c => typeof c === 'string' ? { v: T(c) } : c)), cols: [52, ...Array(Math.max(cab.length, meses.length + 4)).fill(14)] },
+    { nome: 'Matrículas', rows: rowsM, freeze: 1, filtro: 1, cols: head.map((h, i) => i === 1 ? 34 : i === 11 ? 30 : Math.max(10, Math.min(28, h.length + 2))) }
+  ], `base_metas_${ARQ()}_${D.refs[L]}.xlsx`);
+  prog(false); bloqueia(false);
+  toast(`Base de metas: ${nf0.format(rowsM.length - 1)} matrículas e ${nf0.format(total)} economias novas faturando.`);
+}
 // Analítico: uma linha por matrícula e mês com movimento de esgoto, com as mesmas regras de fluxos().
 // Filtrando SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS é igual às economias novas faturando do Resumo,
 // e as linhas com CONTA_COMO_MATRICULA = SIM são as matrículas novas faturando.
@@ -2311,6 +2462,7 @@ function renderDados(){
     ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO — Nova na base (fora do cadastro ou Provisória), Recuperada, Passou a faturar esgoto ou Aumento de economias — e GRUPO; a situação da ligação no cadastro vem em SIT_LIG_CADASTRO_DEZ25, só para consulta. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também a situação na base em dez/25 (NA_BASE_DEZ25, DIAGNOSTICO_DEZ25, grupo, economias e R$ de água e esgoto), as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
     ${li('<b>Diagnóstico dos aumentos</b> (aba Dados, não muda nenhum número): por mês, quanto dos aumentos vem de mês com mais de um contrato, de economias do serviço maiores que o Eco_total, iguais às do outro serviço, de aumentos que voltam no mês seguinte, de quem já faturava em dez/25 ou entrou em 2026, e pelo tamanho do aumento; no mês escolhido, os maiores COD_GRUPO e cidades e a lista para baixar.')}
     ${li('<b>Diagnóstico das recuperadas</b> (topo desta aba, não muda nenhum número): abre as matrículas do grupo Recuperadas pela situação na base em dez/25 — ausente da base (a exportação só traz quem teve faturamento no mês, então não houve conta com Referência dez/25), só com o outro serviço faturado, com valor do serviço sem economias, ou com tudo zerado — e mostra essas economias por mês de entrada, por COD_GRUPO do mês de entrada, por cidade e pelo número de meses faturando em 2026, com a lista para baixar (economias do serviço mês a mês).')}
+    ${li('<b>Base de metas (Excel)</b> (botão ao lado do analítico): arquivo .xlsx com duas abas. <b>Resumo gerencial</b>: célula amarela para digitar a meta anual de economias novas; o % atingido, o que falta, a meta proporcional aos meses da base e o % acumulado de cada mês calculam sozinhos; mais as economias novas por mês e por grupo, as matrículas e o total por cidade. <b>Matrículas</b>: uma linha por matrícula que somou economias em 2026, com o mês e o motivo da entrada (nova, recuperada, passou a faturar esgoto ou aumento de quem já faturava), as economias da entrada, os meses e as economias de aumento, o total do ano e uma coluna por mês (NOVAS_<mês>), as colunas da base no mês da entrada e no último mês e os dados do cadastro. A soma de ECONOMIAS_NOVAS_2026 é o total do Resumo. Respeita os filtros de cidade e sub-categoria.')}
     ${li('<b>Analítico de movimentos:</b> com SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS dá as economias novas faturando do Resumo; ECONOMIAS_NO_GRUPO vai para o GRUPO da linha e ECONOMIAS_AUMENTO para os aumentos; CONTA_COMO_MATRICULA = SIM dá as matrículas novas faturando.')}
   </ol>`;
 }
@@ -2384,6 +2536,7 @@ document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b
 document.querySelectorAll('[data-painel]').forEach(b => b.onclick = () => showPainel(b.dataset.painel));
 $('#btnAnalitico').onclick = () => { if (D && !rodando) ({ todas: exportTodas, entradas: exportEntradas }[$('#anTipo').value] || exportAnalitico)(); };
 $('#anTipo').onchange = () => { if (D) fillAnMes(); };
+$('#btnMetas').onclick = () => { if (D && !rodando) exportMetas(); };
 $('#btnListas').onclick = () => { if (D) exportListas(); };
 document.querySelectorAll('[data-lsv]').forEach(b => b.onclick = () => {
   st.lsv = b.dataset.lsv;
