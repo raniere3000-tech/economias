@@ -23,8 +23,8 @@ if '--cad' in sys.argv:
         if r[cc['NUM_LIGACAO']] is None: continue
         eco = sum(int(r[cc[c]] or 0) for c in ('QTD_ECO_COM', 'QTD_ECO_IND', 'QTD_ECO_PUB', 'QTD_ECO_RES'))
         CAD[str(r[cc['NUM_LIGACAO']]).split('.')[0]] = (SIT.get(sem(r[cc['SIT_LIG']]), 4), sem(r[cc['TIPO_FATURAMENTO']]), eco, str(r[cc['SIT_LIG']]).strip())
-# --ult (v1.37): filtro "Só último contrato (SIM)": só ficam as matrículas com ULTIMO_CONTRATO = SIM (em alguma linha)
-# no cadastro atual; as com NÃO e as fora dele saem de todos os meses
+# --ult (v1.38): filtro "Só último contrato ativo": só ficam as matrículas cuja linha ULTIMO_CONTRATO = SIM no cadastro atual
+# está com SIT_CONTRATO = ATIVO; as outras e as fora dele saem de todos os meses
 ULT = None
 if '--ult' in sys.argv:
     i = sys.argv.index('--ult'); arq_ult = sys.argv[i + 1]; del sys.argv[i:i + 2]; ULT = set()
@@ -34,9 +34,10 @@ if '--ult' in sys.argv:
         for r in ws.iter_rows(values_only=True):
             if cu is None:
                 nomes = [_u2.normalize('NFD', str(c or '')).encode('ascii', 'ignore').decode().strip().upper() for c in r]
-                if 'NUM_LIGACAO' in nomes: cu = (nomes.index('NUM_LIGACAO'), nomes.index('ULTIMO_CONTRATO'))
+                if 'NUM_LIGACAO' in nomes: cu = (nomes.index('NUM_LIGACAO'), nomes.index('ULTIMO_CONTRATO'), nomes.index('SIT_CONTRATO'))
                 continue
-            if r[cu[0]] is not None and _u2.normalize('NFD', str(r[cu[1]] or '')).encode('ascii', 'ignore').decode().strip().upper() == 'SIM':
+            sem2 = lambda t: _u2.normalize('NFD', str(t or '')).encode('ascii', 'ignore').decode().strip().upper()
+            if r[cu[0]] is not None and sem2(r[cu[1]]) == 'SIM' and sem2(r[cu[2]]) == 'ATIVO':
                 ULT.add(str(r[cu[0]]).split('.')[0])
 COL_Q = 'Qtd_eco_fat_agua' if AGUA else 'Qtd_eco_fat_esgoto'
 COL_F = 'Faturamento_bruto_direta_agua' if AGUA else 'Faturamento_bruto_direta_esgoto'
