@@ -253,7 +253,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.38</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.39</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -288,6 +288,10 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="toggle" role="group" aria-label="Contratos considerados" id="tgUlt" hidden title="Pelo cadastro atual: com “Só último contrato ativo”, só contam as matrículas cujo último contrato (ULTIMO_CONTRATO = SIM) está com SIT_CONTRATO = ATIVO; as outras, e as fora do cadastro atual, saem de toda a contagem">
       <button type="button" class="active" data-ult="0" aria-pressed="true">Todos os contratos</button>
       <button type="button" data-ult="1" aria-pressed="false">Só último contrato ativo</button>
+    </div>
+    <div class="toggle" role="group" aria-label="Tipo de faturamento no cadastro atual" id="tgAe" hidden title="Só no painel Esgoto. Com “Só AGUA E ESGOTO”, só contam as matrículas cujo último contrato (ULTIMO_CONTRATO = SIM) está com TIPO_FATURAMENTO = AGUA E ESGOTO no cadastro atual: o saldo das entradas que continuam faturando esgoto">
+      <button type="button" class="active" data-ae="0" aria-pressed="true">Todos os tipos</button>
+      <button type="button" data-ae="1" aria-pressed="false">Só AGUA E ESGOTO</button>
     </div>
     <div class="filtro-wrap" id="fCid"></div>
     <div class="filtro-wrap" id="fSub"></div>
@@ -817,9 +821,10 @@ async function streamCsv(file, onRow, onProgress){
 const CAD_SIT = { PROVISORIA: 1, INATIVA: 2, DESATIVADA: 2, CORTADA: 3, CORTE_PEDIDO: 3, ATIVA: 4 };
 /* ---------- cadastro atual (v1.37): NUM_LIGACAO, ULTIMO_CONTRATO e SIT_CONTRATO, para o filtro "Só último contrato ativo" ---------- */
 // Uma matrícula pode aparecer em mais de uma linha (um contrato por linha): flag 1 = alguma linha SIM, 2 = alguma linha NÃO,
-// 4 = linha SIM com SIT_CONTRATO = ATIVO (v1.38: é o que o filtro usa)
+// 4 = linha SIM com SIT_CONTRATO = ATIVO (v1.38: é o que o filtro usa),
+// 8 = linha SIM com TIPO_FATURAMENTO = AGUA E ESGOTO (v1.39: filtro "Só AGUA E ESGOTO", só no painel Esgoto)
 async function processCadAtual(files){
-  const idx = new Map(), stats = { v: 2, linhas: 0, arquivos: [], ignoradas: [], semColuna: [] };
+  const idx = new Map(), stats = { v: 3, temTipo: false, linhas: 0, arquivos: [], ignoradas: [], semColuna: [] };
   for (let fi = 0; fi < files.length; fi++){
     const file = files[fi], label = `Cadastro atual: ${file.name}`;
     let h = null, seen = 0, usado = false, aba = '';
@@ -830,7 +835,7 @@ async function processCadAtual(files){
         if (cols.includes('NUM_LIGACAO')){
           const u = cols.indexOf('ULTIMO_CONTRATO'), sc = cols.indexOf('SIT_CONTRATO');
           if (u < 0 || sc < 0){ stats.semColuna.push(file.name + (aba ? ' / ' + aba : '')); return false; }
-          h = { mat: cols.indexOf('NUM_LIGACAO'), ult: u, sc };
+          h = { mat: cols.indexOf('NUM_LIGACAO'), ult: u, sc, tf: cols.indexOf('TIPO_FATURAMENTO') }; if (h.tf >= 0) stats.temTipo = true;
         } else if (seen > 30) return false;
         return;
       }
@@ -838,7 +843,7 @@ async function processCadAtual(files){
       let mk = typeof v === 'number' ? String(Math.round(v)) : String(v).trim();
       if (mk.endsWith('.0')) mk = mk.slice(0, -2);
       const sim = norm(c[h.ult]) === 'SIM';
-      idx.set(mk, (idx.get(mk) || 0) | (sim ? 1 : 2) | (sim && norm(c[h.sc]) === 'ATIVO' ? 4 : 0));
+      idx.set(mk, (idx.get(mk) || 0) | (sim ? 1 : 2) | (sim && norm(c[h.sc]) === 'ATIVO' ? 4 : 0) | (sim && h.tf >= 0 && norm(c[h.tf]) === 'AGUA_E_ESGOTO' ? 8 : 0));
       usado = true; stats.linhas++;
     };
     const prog = p => progress(label, `${stats.linhas.toLocaleString('pt-BR')} linhas lidas`, p);
@@ -969,7 +974,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.38';
+const VERSAO_SITE = '1.39';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1034,7 +1039,7 @@ function traduzTela(){
     }
   }
 }
-const st = { soUlt: false, painel: 'esgoto', aguaArquivos: [], cidSel: null, subSel: null, cidTab: null, lt: 'eco', lsv: 'mat', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
+const st = { soUlt: false, soAe: false, painel: 'esgoto', aguaArquivos: [], cidSel: null, subSel: null, cidTab: null, lt: 'eco', lsv: 'mat', metric: 'eco', tab: 'resumo', page: 0, list: null, sortCid: 'tot', sortSub: 'tot' };
 const FIELDS = [
   { k: 'ult', h: 'ULTIMO_CONTRATO', l: 'Último contrato' },
   { k: 'grp', h: 'COD_GRUPO', l: 'Grupo' },
@@ -1178,12 +1183,20 @@ function usaCadAtual(c){
   CADA = c && c.mats ? c : null;
   if (CADA) CADA.idx = new Map(CADA.mats.map((s, i) => [s, i]));
   if (!CADA) st.soUlt = false;
+  if (!temTipoAtual()) st.soAe = false;
   for (const k of Object.keys(DS)) if (DS[k]) marcaUlt(DS[k]);
-  $('#tgUlt').hidden = !CADA;
+  $('#tgUlt').hidden = !CADA; mostraTgAe();
 }
+// filtro "Só AGUA E ESGOTO" (v1.39): precisa do TIPO_FATURAMENTO no cadastro atual (lido pela v1.39 em diante) e vale só no painel Esgoto
+const temTipoAtual = () => !!(CADA && CADA.stats && CADA.stats.v >= 3 && CADA.stats.temTipo);
+const aeLigado = () => st.soAe && temTipoAtual() && D && D.servico === 'esgoto';
+function mostraTgAe(){ const el = $('#tgAe'); if (el) el.hidden = !(temTipoAtual() && st.painel === 'esgoto'); }
+const aeAtual = mk => { const i = CADA ? CADA.idx.get(mk) : undefined; return i !== undefined && (CADA.flag[i] & 8) ? 1 : 0; };
+// matrícula fora da base (listas, conferências): passa nos filtros do cadastro atual?
+const passaAtual = mk => (!(st.soUlt && CADA) || simAtual(mk)) && (!aeLigado() || aeAtual(mk));
 // ultOk[m] = 1 se, no cadastro atual, o último contrato da matrícula (ULTIMO_CONTRATO = SIM) está com SIT_CONTRATO = ATIVO (v1.38)
 const simAtual = mk => { const i = CADA ? CADA.idx.get(mk) : undefined; return i !== undefined && (CADA.flag[i] & 4) ? 1 : 0; };
-function marcaUlt(d){ d.ultOk = CADA ? Uint8Array.from(d.mats, simAtual) : null; }
+function marcaUlt(d){ d.ultOk = CADA ? Uint8Array.from(d.mats, simAtual) : null; d.aeOk = temTipoAtual() ? Uint8Array.from(d.mats, aeAtual) : null; }
 function usaCad(c){
   CAD = c && c.mats ? c : null;
   if (CAD) CAD.idx = new Map(CAD.mats.map((s, i) => [s, i]));
@@ -1263,8 +1276,8 @@ function montaFiltro(id, nome, lista, chave){
 document.addEventListener('click', () => document.querySelectorAll('.painel-filtro.aberto').forEach(p => { p.classList.remove('aberto'); p.previousElementSibling.setAttribute('aria-expanded', 'false'); }));
 
 function keepMask(){
-  const n = D.mats.length, k = new Uint8Array(n), C = st.cidSel, S = st.subSel, U = st.soUlt && D.ultOk ? D.ultOk : null;
-  for (let m = 0; m < n; m++) k[m] = (!C || C.has(D.cid[m])) && (!S || S.has(D.sub[m])) && (!U || U[m]) ? 1 : 0;
+  const n = D.mats.length, k = new Uint8Array(n), C = st.cidSel, S = st.subSel, U = st.soUlt && D.ultOk ? D.ultOk : null, A = aeLigado() && D.aeOk ? D.aeOk : null;
+  for (let m = 0; m < n; m++) k[m] = (!C || C.has(D.cid[m])) && (!S || S.has(D.sub[m])) && (!U || U[m]) && (!A || A[m]) ? 1 : 0;
   return k;
 }
 
@@ -1337,12 +1350,13 @@ function derive(){
 function fluxos(k){
   const nR = D.refs.length, P = D.present, H = D.hasE, Q = D.Q, F = D.F;
   const nC = D.dict.cid.length, nS = D.dict.sub.length, z = n => new Float64Array(n);
-  const o = { ent: z(nR), aum: z(nR), eC: [0, 1, 2, 3, 4, 5, 6, 7].map(() => z(nR)), lig: z(nR), ligC: [0, 1, 2, 3, 4, 5, 6, 7].map(() => z(nR)), ligAum: z(nR), ligTot: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), red: z(nR), ree: z(nR), divMat: z(nR),
+  const o = { ent: z(nR), aum: z(nR), eC: [0, 1, 2, 3, 4, 5, 6, 7].map(() => z(nR)), lig: z(nR), ligC: [0, 1, 2, 3, 4, 5, 6, 7].map(() => z(nR)), ligAum: z(nR), ligTot: z(nR), fatTot: z(nR), fatNovas: z(nR), ecoTot: z(nR), sai: z(nR), saiM: z(nR), saiMAno: 0, red: z(nR), ree: z(nR), divMat: z(nR),
     cidE: z(nC * nR), cidF: z(nC * nR), cidS: z(nC), subE: z(nS * nR), subF: z(nS * nR), subS: z(nS),
     cidUsed: new Uint8Array(nC), subUsed: new Uint8Array(nS) };
   for (let m = 0, n = D.mats.length; m < n; m++){
     if (!k[m]) continue;
     const b = m * nR, c = D.cid[m], s = D.sub[m], nova = D.entra[m], base0 = H[b] ? Q[b] : 0;
+    let saiu = false;   // matrícula que deixou de faturar: conta uma vez no total do ano
     o.cidUsed[c] = 1; o.subUsed[s] = 1;
     for (let r = 0; r < nR; r++){
       const j = b + r;
@@ -1368,7 +1382,7 @@ function fluxos(k){
       }
       if (mv === 3) o.ree[r] += Q[j];
       else if (mv === 6) o.ree[r] += Q[j] - Q[j - 1];
-      else if (mv === 4){ out = Q[j - 1]; o.sai[r] += out; }
+      else if (mv === 4){ out = Q[j - 1]; o.sai[r] += out; o.saiM[r]++; if (!saiu){ saiu = true; o.saiMAno++; } }
       else if (mv === 5){ out = Q[j - 1] - Q[j]; o.red[r] += out; }
       if (out){ o.cidS[c] += out; o.subS[s] += out; }
     }
@@ -1522,10 +1536,12 @@ function renderResumo(){
       extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
       tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(o.eC, 'economias')),
       totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
-    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias (“novas” = novas na base, “p/ esgoto” = passaram a faturar esgoto). Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. No fim, o total do ano.',
+    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias (“novas” = novas na base, “p/ esgoto” = passaram a faturar esgoto). Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. Matrículas que deixaram de faturar (só para conhecimento): as que faturavam no mês anterior e ficaram sem economias faturadas no mês; no total do ano, cada uma conta uma vez, mesmo que tenha saído mais de uma vez. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
       mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas', r)),
-      tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas')) },
+      extra: r => ltK('Matrículas que deixaram de faturar', nf0.format(o.saiM[r]), 'neg'),
+      tot: () => ltVal(mais(ligAno), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas')),
+      totExtra: () => ltK('Matrículas que deixaram de faturar', nf0.format(o.saiMAno), 'neg') },
     fat: { nota: 'Faturamento de esgoto das economias novas faturando em cada mês e o faturamento de esgoto total do mês. No fim, a soma do ano.',
       base: () => ltVal(brl0.format(o.fatTot[0]), 'faturamento de esgoto do mês'),
       mes: r => ltVal(brl0.format(o.fatNovas[r]), 'das economias novas faturando', fatPart(r)),
@@ -1592,7 +1608,8 @@ function renderResumo(){
     (s.semRef ? ` ${nf0.format(s.semRef)} linhas sem referência válida foram ignoradas.` : '') +
     (D.cmp && D.cmp.length ? ` Listas de comparação, fora dos totais: ${D.cmp.map(c => `${c.L.arquivos.join(', ')} (${c.label}, ${nf0.format(c.L.mats.length)} matrículas)`).join('; ')}.` : '') +
     (s.ignoradas.length ? ` Abas sem a coluna NUM_LIGACAO, ignoradas: ${s.ignoradas.join(', ')}.` : '') +
-    (st.soUlt && CADA ? ` FILTRO LIGADO: só último contrato ativo — ficam só as ${nf0.format(D.ultOk.reduce((a, b) => a + b, 0))} matrículas da base cujo último contrato (SIM) está ATIVO no cadastro atual (${CADA.meta ? CADA.meta.arquivos.join(', ') : 'cadastro atual'}); as outras (contrato encerrado, anulado, pendente… ou fora do cadastro atual) saem de todos os meses.` : '');
+    (st.soUlt && CADA ? ` FILTRO LIGADO: só último contrato ativo — ficam só as ${nf0.format(D.ultOk.reduce((a, b) => a + b, 0))} matrículas da base cujo último contrato (SIM) está ATIVO no cadastro atual (${CADA.meta ? CADA.meta.arquivos.join(', ') : 'cadastro atual'}); as outras (contrato encerrado, anulado, pendente… ou fora do cadastro atual) saem de todos os meses.` : '') +
+    (aeLigado() ? ` FILTRO LIGADO: só AGUA E ESGOTO — ficam só as ${nf0.format(D.aeOk.reduce((a, b) => a + b, 0))} matrículas da base cujo último contrato (SIM) está com TIPO_FATURAMENTO = AGUA E ESGOTO no cadastro atual; as com AGUA ou fora dele saem de todos os meses.` : '');
   // os nomes das rubricas são dados: ficam em data-literal, fora da troca esgoto → água
   renderCad();
   avisoAbas();
@@ -1621,7 +1638,7 @@ function conferencias(){
     if (esg && C.dict.tipo[C.tipo[ci]] !== 'AGUA E ESGOTO') continue;   // no esgoto, só as ligações com esgoto no cadastro
     const m = naBase[ci];
     if (m >= 0){ if (!k[m] || D.hasE[m * nR]) continue; }
-    else if ((nomeCid && !nomeCid.has(C.dict.cid[C.cid[ci]])) || (nomeSub && !nomeSub.has(C.dict.sub[C.sub[ci]])) || (st.soUlt && CADA && !simAtual(C.mats[ci]))) continue;
+    else if ((nomeCid && !nomeCid.has(C.dict.cid[C.cid[ci]])) || (nomeSub && !nomeSub.has(C.dict.sub[C.sub[ci]])) || !passaAtual(C.mats[ci])) continue;
     out[2].push(m >= 0 ? m : -1 - ci);                                   // fora da base: -1 - índice no cadastro
   }
   return out;
@@ -1853,7 +1870,7 @@ function montaListas(){
 // itens da lista que passam nos filtros de cidade e sub-categoria (fora da base, pela cidade da própria lista)
 function itensFiltrados(c, k){
   const C = st.cidSel, S = st.subSel, ci = new Map(D.dict.cid.map((v, i) => [v, i])), si = new Map(D.dict.sub.map((v, i) => [v, i]));
-  return c.itens.filter(t => t.m >= 0 ? k[t.m] : (!C || C.has(ci.get(c.L.cid[t.i]))) && (!S || S.has(si.get(c.L.sub[t.i]))) && (!st.soUlt || !CADA || simAtual(c.L.mats[t.i])));
+  return c.itens.filter(t => t.m >= 0 ? k[t.m] : (!C || C.has(ci.get(c.L.cid[t.i]))) && (!S || S.has(si.get(c.L.sub[t.i]))) && passaAtual(c.L.mats[t.i]));
 }
 // economias de uma matrícula da lista na visão Economias: as de esgoto faturadas no primeiro mês faturando; quem ainda
 // não faturou, o total de economias no último mês em que aparece; fora da base, as economias da própria lista
@@ -1906,7 +1923,7 @@ async function exportListas(){
   baixa([txt], 'comparativo_listas_virar.csv');
 }
 // com o filtro "Só último contrato ativo" ligado, todo download leva "_so_contrato_ativo" no nome
-const nomeUlt = nome => st.soUlt && CADA ? nome.replace(/(\.[a-z]+)$/i, '_so_contrato_ativo$1') : nome;
+const nomeUlt = nome => nome.replace(/(\.[a-z]+)$/i, (st.soUlt && CADA ? '_so_contrato_ativo' : '') + (aeLigado() ? '_so_agua_e_esgoto' : '') + '$1');
 function baixa(parts, nome){
   const url = URL.createObjectURL(new Blob(parts, { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = nomeUlt(nome); document.body.appendChild(a); a.click(); a.remove();
@@ -2015,7 +2032,7 @@ async function exportMetas(){
   }
   prog(true, null, null, 0.6); await new Promise(res => setTimeout(res));
   // aba Resumo gerencial
-  const total = sumFrom1(o.ent), mats = sumFrom1(o.lig), filtros = [st.cidSel ? `cidades: ${[...st.cidSel].map(i => D.dict.cid[i]).join(', ')}` : '', st.subSel ? `sub-categorias: ${[...st.subSel].map(i => D.dict.sub[i]).join(', ')}` : '', st.soUlt && CADA ? 'só último contrato ativo pelo cadastro atual' : ''].filter(Boolean).join('; ');
+  const total = sumFrom1(o.ent), mats = sumFrom1(o.lig), filtros = [st.cidSel ? `cidades: ${[...st.cidSel].map(i => D.dict.cid[i]).join(', ')}` : '', st.subSel ? `sub-categorias: ${[...st.subSel].map(i => D.dict.sub[i]).join(', ')}` : '', st.soUlt && CADA ? 'só último contrato ativo pelo cadastro atual' : '', aeLigado() ? 'só AGUA E ESGOTO no cadastro atual' : ''].filter(Boolean).join('; ');
   const R = [], add = r => { R.push(r); return R.length; };
   add([{ v: `Entradas de economias de ${S} 2026 — resumo gerencial`, s: XS.tit }]);
   add([{ v: `Gerado em ${new Date().toLocaleDateString('pt-BR')} pelo painel v${VERSAO_SITE}, ${labels[1]} a ${labels[L]}${filtros ? ' · filtros: ' + filtros : ' · sem filtros'}. Regras completas na aba Dados do painel.`, s: XS.nota }]);
@@ -2221,6 +2238,7 @@ function showTab(t){
 }
 // painéis Esgoto e Água: título, selo e filtros acompanham o painel escolhido
 function showPainel(p){
+  setTimeout(mostraTgAe, 0);
   st.painel = p;
   document.querySelectorAll('[data-painel]').forEach(b => { const on = b.dataset.painel === p; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
   const nome = p === 'agua' ? 'água' : 'esgoto';
@@ -2514,7 +2532,7 @@ function renderDados(){
     ${li('<b>Regra do teto (esgoto e água).</b> Cada matrícula tem um teto: as economias faturadas em dez/25 para quem já faturava; 0 para quem não faturava. Em cada mês, só soma o que passar do teto, e o teto sobe para o novo valor. Cortada e religada com as mesmas economias não soma de novo. <span class="ex">Ex.: 3 em dez/25 → 5 em mar (+2) → 0 em abr (corte) → 5 em mai (não soma) → 6 em jun (+1).</span>')}
     ${li('<b>Economias novas faturando no mês</b> = soma dos grupos 1 a 4 no mês. O total do ano é a soma dos meses, sem descontar quem deixou de faturar.')}
     ${li('<b>Matrículas novas faturando:</b> cada matrícula conta uma vez no ano, no primeiro mês em que soma economias, no grupo dessa primeira entrada.')}
-    ${li('<b>Deixaram de faturar</b> (só para conhecimento, nunca descontado): economias do mês anterior de quem deixou de faturar, mais a redução de economias de quem continua faturando. <b>Voltaram a faturar</b> (não somadas): quem volta depois de sair sem passar do teto.')}
+    ${li('<b>Deixaram de faturar</b> (só para conhecimento, nunca descontado): economias do mês anterior de quem deixou de faturar, mais a redução de economias de quem continua faturando. <b>Matrículas que deixaram de faturar</b> (v1.39, linha do tempo em Matrículas): as que faturavam no mês anterior e ficaram sem economias faturadas no mês (a redução de economias não conta aqui); no Total 2026 cada matrícula conta uma vez, mesmo que tenha saído mais de uma vez. <b>Voltaram a faturar</b> (não somadas): quem volta depois de sair sem passar do teto.')}
   </ol>
 
   <h2>5. Faturamento</h2>
@@ -2527,7 +2545,7 @@ function renderDados(){
   <ol start="20">
     ${li('<b>Conferência com o cadastro</b> (Resumo): (a) fora do cadastro e faturando em dez/25; (b) economias do cadastro diferentes das faturadas em dez/25; (c) no cadastro sem faturar em dez/25, qualquer situação menos provisória (no esgoto, só as que têm AGUA E ESGOTO no cadastro). Desde a v1.31 não há conferência pela situação da ligação. Cada uma tem a lista para baixar.')}
     ${li('<b>Divergências</b> (Consolidado): economias do serviço diferentes do Eco_total, ou economias sem valor faturado do serviço, nos meses faturando.')}
-    ${li('<b>Filtros</b> de cidade e sub-categoria valem para todo o Resumo, o Consolidado e os downloads, pela cidade e sub-categoria mais recentes da matrícula. <b>Só último contrato ativo</b> (v1.37, regra ajustada na v1.38; botão ao lado dos filtros, desligado ao abrir; aparece quando a subpasta Cadastro tem o cadastro atual): na subpasta Cadastro, o arquivo com “dez” ou “2025” no nome é a foto de dez/25 (regras 8 a 13); o outro é o cadastro atual, que serve só para este filtro. Com o filtro ligado, só contam as matrículas que continuam na base hoje: no cadastro atual, a linha do último contrato (ULTIMO_CONTRATO = SIM) precisa estar com SIT_CONTRATO = ATIVO. As outras (último contrato encerrado, anulado, pendente ou cancelado) e as que não estão no cadastro atual saem inteiras, em todos os meses (dez/25 inclusive), como num filtro de cidade. As linhas NÃO do cadastro atual (contratos anteriores, por troca de titularidade) não entram na conta. <span class="ex">Ex.: matrícula que passou a faturar esgoto em mar/26 e hoje está com o último contrato ENCERRADO não conta; a que trocou de titular e tem o contrato novo ATIVO conta.</span> Vale para indicadores, gráficos, linha do tempo, Consolidado, conferências, listas e todos os downloads, nos dois painéis; com ele ligado, o rodapé avisa e os arquivos baixados levam “_so_contrato_ativo” no nome.' + (CADA ? ` Cadastro atual: ${nf0.format(CADA.mats.length)} matrículas, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 1 ? 1 : 0), 0))} com último contrato (SIM), ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 4 ? 1 : 0), 0))} com o último contrato ATIVO.` : ''))}
+    ${li('<b>Filtros</b> de cidade e sub-categoria valem para todo o Resumo, o Consolidado e os downloads, pela cidade e sub-categoria mais recentes da matrícula. <b>Só último contrato ativo</b> (v1.37, regra ajustada na v1.38; botão ao lado dos filtros, desligado ao abrir; aparece quando a subpasta Cadastro tem o cadastro atual): na subpasta Cadastro, o arquivo com “dez” ou “2025” no nome é a foto de dez/25 (regras 8 a 13); o outro é o cadastro atual, que serve só para este filtro. Com o filtro ligado, só contam as matrículas que continuam na base hoje: no cadastro atual, a linha do último contrato (ULTIMO_CONTRATO = SIM) precisa estar com SIT_CONTRATO = ATIVO. As outras (último contrato encerrado, anulado, pendente ou cancelado) e as que não estão no cadastro atual saem inteiras, em todos os meses (dez/25 inclusive), como num filtro de cidade. As linhas NÃO do cadastro atual (contratos anteriores, por troca de titularidade) não entram na conta. <span class="ex">Ex.: matrícula que passou a faturar esgoto em mar/26 e hoje está com o último contrato ENCERRADO não conta; a que trocou de titular e tem o contrato novo ATIVO conta.</span> <b>Só AGUA E ESGOTO</b> (v1.39, só no painel Esgoto, outro botão, também desligado ao abrir): só contam as matrículas cujo último contrato (linha SIM) está com TIPO_FATURAMENTO = AGUA E ESGOTO no cadastro atual; as com AGUA e as fora do cadastro atual saem inteiras, em todos os meses. Serve para ver o saldo: das entradas de esgoto de 2026, quantas continuam com esgoto hoje. Pode ser usado junto com o de contrato ativo (valem os dois) e leva “_so_agua_e_esgoto” no nome dos downloads. Vale para indicadores, gráficos, linha do tempo, Consolidado, conferências, listas e todos os downloads, nos dois painéis; com ele ligado, o rodapé avisa e os arquivos baixados levam “_so_contrato_ativo” no nome.' + (CADA ? ` Cadastro atual: ${nf0.format(CADA.mats.length)} matrículas, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 1 ? 1 : 0), 0))} com último contrato (SIM), ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 4 ? 1 : 0), 0))} com o último contrato ATIVO` + (temTipoAtual() ? `, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 8 ? 1 : 0), 0))} com o último contrato AGUA E ESGOTO.` : '. Clique em ↻ Atualizar para ler o TIPO_FATURAMENTO e liberar o filtro “Só AGUA E ESGOTO”.') : ''))}
   </ol>
 
   <h2>7. Downloads</h2>
@@ -2614,6 +2632,11 @@ $('#btnMetas').onclick = () => { if (D && !rodando) exportMetas(); };
 document.querySelectorAll('[data-ult]').forEach(b => b.onclick = () => {
   st.soUlt = b.dataset.ult === '1';
   document.querySelectorAll('[data-ult]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+  refresh();
+});
+document.querySelectorAll('[data-ae]').forEach(b => b.onclick = () => {
+  st.soAe = b.dataset.ae === '1';
+  document.querySelectorAll('[data-ae]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
   refresh();
 });
 $('#btnListas').onclick = () => { if (D) exportListas(); };

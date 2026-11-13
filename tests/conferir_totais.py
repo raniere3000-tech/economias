@@ -25,19 +25,26 @@ if '--cad' in sys.argv:
         CAD[str(r[cc['NUM_LIGACAO']]).split('.')[0]] = (SIT.get(sem(r[cc['SIT_LIG']]), 4), sem(r[cc['TIPO_FATURAMENTO']]), eco, str(r[cc['SIT_LIG']]).strip())
 # --ult (v1.38): filtro "Só último contrato ativo": só ficam as matrículas cuja linha ULTIMO_CONTRATO = SIM no cadastro atual
 # está com SIT_CONTRATO = ATIVO; as outras e as fora dele saem de todos os meses
-ULT = None
+# --ae (v1.39): filtro "Só AGUA E ESGOTO": só ficam as matrículas cuja linha SIM no cadastro atual tem TIPO_FATURAMENTO =
+# AGUA E ESGOTO. Com --ult e --ae juntos valem os dois; --ae sozinho também precisa do arquivo: --ae cadastro_atual.xlsx
+ULT = None; SO_ATIVO = SO_AE = False; arq_ult = None
 if '--ult' in sys.argv:
-    i = sys.argv.index('--ult'); arq_ult = sys.argv[i + 1]; del sys.argv[i:i + 2]; ULT = set()
+    i = sys.argv.index('--ult'); arq_ult = sys.argv[i + 1]; del sys.argv[i:i + 2]; SO_ATIVO = True
+if '--ae' in sys.argv:
+    i = sys.argv.index('--ae'); arq_ult = sys.argv[i + 1]; del sys.argv[i:i + 2]; SO_AE = True
+if arq_ult:
+    ULT = set()
     import unicodedata as _u2
     for ws in load_workbook(arq_ult, read_only=True).worksheets:
         cu = None
         for r in ws.iter_rows(values_only=True):
             if cu is None:
                 nomes = [_u2.normalize('NFD', str(c or '')).encode('ascii', 'ignore').decode().strip().upper() for c in r]
-                if 'NUM_LIGACAO' in nomes: cu = (nomes.index('NUM_LIGACAO'), nomes.index('ULTIMO_CONTRATO'), nomes.index('SIT_CONTRATO'))
+                if 'NUM_LIGACAO' in nomes: cu = (nomes.index('NUM_LIGACAO'), nomes.index('ULTIMO_CONTRATO'), nomes.index('SIT_CONTRATO'), nomes.index('TIPO_FATURAMENTO') if 'TIPO_FATURAMENTO' in nomes else None)
                 continue
             sem2 = lambda t: _u2.normalize('NFD', str(t or '')).encode('ascii', 'ignore').decode().strip().upper()
-            if r[cu[0]] is not None and sem2(r[cu[1]]) == 'SIM' and sem2(r[cu[2]]) == 'ATIVO':
+            if r[cu[0]] is None or sem2(r[cu[1]]) != 'SIM': continue
+            if (not SO_ATIVO or sem2(r[cu[2]]) == 'ATIVO') and (not SO_AE or sem2(r[cu[3]]) == 'AGUA E ESGOTO'):
                 ULT.add(str(r[cu[0]]).split('.')[0])
 COL_Q = 'Qtd_eco_fat_agua' if AGUA else 'Qtd_eco_fat_esgoto'
 COL_F = 'Faturamento_bruto_direta_agua' if AGUA else 'Faturamento_bruto_direta_esgoto'
@@ -78,6 +85,7 @@ base_mat = sum(1 for m in T if T[m].get(k0))
 base_eco = sum(Q[m][k0] for m in T if T[m].get(k0))
 z = lambda: [0.0] * n
 nov, aum, sai, red, ree, fat_tot, fat_novas = z(), z(), z(), z(), z(), z(), z()
+sai_m, sai_m_ano = z(), 0   # matrículas que deixaram de faturar (v1.39): por mês e no ano, cada uma uma vez
 e_base, e_nova, lig, lig_nova, lig_aum = z(), z(), z(), z(), z()
 grupo, lig_t, tot_t, ree_t = {g: z() for g in range(1, 8)}, {g: z() for g in range(1, 8)}, z(), z()
 gm_cont = collections.Counter()
@@ -93,6 +101,7 @@ for m in T:
     prim = min(refs.index(k) for k in T[m])
     nova = entra > 0 and entra == prim
     e_orig = e_nova if nova else e_base
+    saiu = False
     ligou = False  # a ligação conta uma vez no ano, no primeiro mês em que soma economias novas
     # grupo da matrícula (0 já faturava em dez/25; 1 nova; 2 recuperada, qualquer situação menos provisória; 5 passou a faturar
     # esgoto; 7 recuperada sem cadastro; desde a v1.31 não há 3 e 4) e quantas economias contam no grupo na primeira vez (o resto é aumento, 6)
@@ -127,7 +136,9 @@ for m in T:
                 if q[r] > 0 and not ligou:
                     ligou = True; lig[r] += 1; lig_nova[r] += nova
             else: ree[r] += q[r]
-        elif h[r - 1] and not h[r]: sai[r] += q[r - 1]
+        elif h[r - 1] and not h[r]:
+            sai[r] += q[r - 1]; sai_m[r] += 1
+            if not saiu: saiu = True; sai_m_ano += 1
         elif h[r] and h[r - 1]:
             d = q[r] - q[r - 1]
             if d > 0:
@@ -161,6 +172,7 @@ if CAD:
           '| economias diferentes', sum(1 for m in fat0 if str(m) in CAD and CAD[str(m)][2] != Q[m][k0]),
           '| no cadastro sem faturar', sum(1 for mk, v in CAD.items() if v[0] != 1 and (AGUA or v[1] == 'AGUA E ESGOTO')
                                       and not any(T[m].get(k0) for m in T if str(m) == mk)))
+print('Matrículas que deixaram de faturar: ' + ' '.join(f'{rot[r]} {sai_m[r]:.0f}' for r in range(1, n)) + f'   no ano (uma vez cada): {sai_m_ano}')
 print(f'Fat. esgoto das novas no ano: {sum(fat_novas):,.0f}   Saídas: {sum(sai)+sum(red):,.0f}   Reentradas: {sum(ree):,.0f}')
 
 # comparativo com as listas "Virar para Água e Esgoto": mês previsto pelo nome do arquivo
