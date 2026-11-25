@@ -79,6 +79,11 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .card{background:#fff;margin:10px 0;padding:14px 18px;border:1px solid var(--linha);border-radius:12px;box-shadow:0 3px 12px rgba(17,42,66,.045)}
 .card h2{font-size:14px;font-weight:600;margin:0 0 2px;color:var(--marinho);letter-spacing:-.005em}
 .nota-secao{margin:0 0 8px;color:var(--azul-claro);font-size:12px;line-height:1.4}
+/* legenda dos grupos acima da linha do tempo (v1.40): um cartão por grupo, com a cor do grupo à esquerda */
+.lt-leg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:4px 0 12px}
+.lt-leg div{border:1px solid var(--linha);border-left:4px solid var(--c);border-radius:6px;padding:8px 12px;background:#fff}
+.lt-leg b{display:block;color:var(--marinho);font-size:13px;margin-bottom:2px}
+.lt-leg p{margin:0;font-size:12px;color:var(--azul-claro);line-height:1.35}
 .card-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 16px;flex-wrap:wrap}
 .card-topo > div:first-child{flex:1 1 320px;min-width:0}
 .card-topo > .toggle,.card-topo > .card-acoes,.card-topo > .legenda{flex:0 0 auto}
@@ -253,7 +258,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.39</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.40</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -326,6 +331,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
           <button type="button" data-lt="fat" aria-pressed="false">Faturamento</button>
         </div>
       </div>
+      <div class="lt-leg" id="ltLeg"></div>
       <div class="bloco-rolagem"><div class="lt" id="linhaTempo"></div></div>
     </div>
 
@@ -974,7 +980,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.39';
+const VERSAO_SITE = '1.40';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -997,6 +1003,14 @@ let CAD = null;
 let CADA = null;
 // grupos das economias novas (D.cat, D.cls): os números são os das regras da aba Dados
 const G_NOVA = 1, G_RECUP = 2, G_ESG = 5, G_AUM = 6, G_REC = 7;   // 3 e 4 (recuperadas por situação) saíram na v1.31
+// legenda da linha do tempo (v1.40, textos definidos pelo usuário)
+const LEGENDA = {
+  1: ['Novas', 'Crescimento da base (economias fora do cadastro de dez/25)'],
+  2: ['Recuperadas', 'Reativação de cadastro existente (cadastradas em dez/25, sem faturamento no mês)'],
+  5: ['Passaram a faturar esgoto', 'Matrículas que faturavam só água em dez/25'],
+  6: ['Aumentos', 'Incremento de economias em matrículas ativas (só o que supera o maior número de economias já faturado)'],
+  7: ['Recuperadas da base de dez/25', 'Estavam na base de dez/25 sem faturar (sem o cadastro de dez/25 carregado)']
+};
 const GRUPOS = {
   1: { abv: 'novas', eco: 'Economias novas na base', mat: 'Matrículas novas na base', curto: 'novas na base', curtoMat: 'novas na base', cor: '#176b9c', txt: '#fff' },
   2: { abv: 'recuperadas', eco: 'Economias recuperadas', mat: 'Matrículas recuperadas', curto: 'recuperadas', curtoMat: 'recuperadas', cor: '#102840', txt: '#fff' },
@@ -1530,13 +1544,13 @@ function renderResumo(){
   }).join('');
   const fatPart = r => o.fatTot[r] ? nf1.format(o.fatNovas[r] / o.fatTot[r] * 100) + '% do total' : '';
   const LT = {
-    eco: { nota: `Economias novas faturando esgoto em cada mês, separadas por grupo (${listaGr} e aumentos de economias, só o que passa do maior número já faturado pela matrícula). “novas” = novas na base, “p/ esgoto” = passaram a faturar esgoto; passe o mouse sobre o número para ver o nome completo. No fim, o total do ano.`,
+    eco: { nota: 'Economias novas faturando esgoto em cada mês, por grupo. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ecoTot[0]), 'economias faturando esgoto na base'),
       mes: r => ltVal(mais(ent(r)), 'economias novas faturando', ltParte(o.eC, 'economias', r)),
       extra: r => ltK('Economias que deixaram de faturar', nf0.format(o.sai[r] + o.red[r]), 'neg'),
       tot: () => ltVal(mais(total), 'economias novas faturando', ltParte(o.eC, 'economias')),
       totExtra: () => ltK('Economias que deixaram de faturar', nf0.format(sai), 'neg') },
-    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, separadas pelo grupo das economias (“novas” = novas na base, “p/ esgoto” = passaram a faturar esgoto). Cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. Matrículas que deixaram de faturar (só para conhecimento): as que faturavam no mês anterior e ficaram sem economias faturadas no mês; no total do ano, cada uma conta uma vez, mesmo que tenha saído mais de uma vez. No fim, o total do ano.',
+    mat: { nota: 'Matrículas novas faturando esgoto em cada mês, por grupo: cada matrícula conta uma vez, no primeiro mês em que soma economias, no grupo da sua primeira entrada. As que deixaram de faturar (faturavam no mês anterior e ficaram sem economias) aparecem só para conhecimento; no total do ano, cada uma conta uma vez. No fim, o total do ano.',
       base: () => ltVal(nf0.format(o.ligTot[0]), 'matrículas faturando esgoto na base'),
       mes: r => ltVal(mais(o.lig[r]), 'matrículas novas faturando', ltParte(o.ligC, 'matrículas', r)),
       extra: r => ltK('Matrículas que deixaram de faturar', nf0.format(o.saiM[r]), 'neg'),
@@ -1550,6 +1564,9 @@ function renderResumo(){
       totExtra: () => ltK('Faturamento de esgoto no ano', brl0.format(sumFrom1(o.fatTot))) }
   }[st.lt];
   $('#ltNota').textContent = LT.nota;
+  // legenda dos grupos: só em Economias e Matrículas (o faturamento não é separado por grupo)
+  $('#ltLeg').hidden = st.lt === 'fat';
+  $('#ltLeg').innerHTML = GR.map(g => `<div style="--c:${g.cor}"><b>${esc(LEGENDA[g.k][0])}</b><p>${esc(LEGENDA[g.k][1])}</p></div>`).join('');
   const lt = $('#linhaTempo'); lt.style.setProperty('--n', nR); lt.classList.toggle('lt-fat', st.lt === 'fat');
   lt.innerHTML = labels.map((l, r) => r ? ltCol('', l, LT.mes(r), LT.extra && LT.extra(r)) : ltCol('', l, LT.base(), '')).join('') +
     ltCol('total', 'Total 2026', LT.tot(), LT.totExtra && LT.totExtra());
