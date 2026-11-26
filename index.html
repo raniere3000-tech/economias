@@ -258,7 +258,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.41</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.42</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -350,6 +350,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
           <select id="anMes" class="sel-mes" aria-label="Mês do analítico"></select>
           <button class="btn-just" id="btnAnalitico" type="button" title="Uma linha por matrícula e mês com movimento de esgoto, com os filtros de cidade e sub-categoria">⬇ Baixar analítico</button>
           <button class="btn-just" id="btnMetas" type="button" title="Excel com a aba Resumo gerencial (com a meta para digitar) e a aba Matrículas: uma linha por matrícula que entrou ou aumentou economias em 2026">⬇ Base de metas (Excel)</button>
+          <button class="btn-just" id="btnJust" type="button" title="Excel com a aba Resumo (economias novas de cada mês por grupo e o total do ano, com a soma conferida em cada aba) e uma aba por mês com as matrículas que entraram, mais a aba Total 2026">⬇ Base de justificativa (Excel)</button>
         </div>
       </div>
       <div class="legenda" id="legEco"></div>
@@ -980,7 +981,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.41';
+const VERSAO_SITE = '1.42';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -2071,7 +2072,7 @@ async function exportMetas(){
   add([`Matrículas novas faturando ${S} em 2026`, { v: mats, s: XS.int }]);
   add([]);
   add([{ v: 'Economias novas faturando por mês', s: XS.neg }]);
-  const cab = ['Mês', ...GRs.map(g => GRUPOS[g].eco), 'Total no mês', 'Acumulado', '% da meta (acumulado)', 'Matrículas no mês', 'Matrículas acumuladas', 'Deixaram de faturar (só informação)'];
+  const cab = ['Mês', ...GRs.map(g => T(GRUPOS[g].eco)), 'Total no mês', 'Acumulado', '% da meta (acumulado)', 'Matrículas no mês', 'Matrículas acumuladas', 'Deixaram de faturar (só informação)'];
   add(cab.map(h => ({ v: T(h), s: XS.cab })));
   const r1 = R.length + 1; let acc = 0, accM = 0;
   for (let r = 1; r < nR; r++){
@@ -2206,11 +2207,9 @@ function motivo(m, cat){
   if (cat === G_NOVA) return ci >= 0 ? `Nova na base (${capital(sit)})` : 'Nova na base (fora do cadastro)';
   return 'Recuperada';                                     // a situação da ligação fica só na coluna SIT_LIG_CADASTRO_DEZ25
 }
-async function exportEntradas(){
-  const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
-  const r0 = mes > 0 ? mes : 1, r1 = mes > 0 ? mes : nR - 1, Q = D.Q, C = CAD;
-  bloqueia(true); prog(true, 'Gerando as entradas com motivo', mes > 0 ? labels[mes] : 'todos os meses', 0);
-  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// linhas das entradas de um mês (uma por matrícula e motivo; quem passa do limite do grupo gera a linha do grupo e a do aumento).
+// Usada pelo CSV "Entradas do mês (com motivo)" e pela base de justificativa em Excel (xl = números como números).
+function headEntradas(){
   const head = ['REFERENCIA', 'NUM_LIGACAO', 'NOM_CLIENTE', 'CIDADE', 'SUB_CATEGORIA', 'SIT_LIG', 'SIT_CONTRATO', 'PRIMEIRO_MES_FATURANDO_ESGOTO',
     'MOTIVO', 'GRUPO', 'ECONOMIAS_ENTRADA', 'CONTA_COMO_MATRICULA', 'MOVIMENTO', 'ECO_ESGOTO_DEZ25', 'TETO_ANTES_DO_MES', 'ECO_ESGOTO_MES_ANTERIOR', 'ECO_ESGOTO_MES',
     'ECONOMIAS_CONTADAS_NO_MES', 'MES_PASSOU_A_FATURAR_ESGOTO', 'ECONOMIAS_NOVAS_2026'].map(HC);
@@ -2218,11 +2217,15 @@ async function exportEntradas(){
   FIELDS.forEach(f => head.push(f.h + '_MES'));
   head.push(...['ORIGEM', 'SIT_LIG_CADASTRO_DEZ25', 'SIT_CONTRATO_CADASTRO_DEZ25', 'TIPO_FATURAMENTO_CADASTRO_DEZ25', ...CAD_CAT.map(c => c + '_CADASTRO_DEZ25'),
     'ECO_CADASTRO_DEZ25', 'NOM_CLIENTE_CADASTRO', 'CIDADE_CADASTRO', 'SUB_CATEGORIA_CADASTRO', 'LISTAS_VIRAR'].map(HC));
-  const parts = ['\ufeff' + head.join(';') + '\r\n'];
-  let linhas = 0, soma = 0, mats = 0;
-  for (let r = r0; r <= r1; r++){
-    let chunk = '';
-    for (const m of D.ordMat){
+  return head;
+}
+const COL_ECO_ENTRADA = 10;   // posição de ECONOMIAS_ENTRADA nas linhas (coluna K no Excel)
+const valXl = (f, j) => !D.present[j] ? '' : f === 'ult' ? cellVal('ult', j, true) : f === 'grp' ? (D.grp[j] < 0 ? '' : D.grp[j]) : f === 'tipo' ? D.dict.tipo[D.tipo[j]]
+  : f === 'fa' || f === 'fe' ? { v: D[f][j], s: XS.rs } : D[f][j];
+function entradasDoMes(r, k, xl){
+  const nR = D.refs.length, labels = D.refs.map(refLabel), Q = D.Q, C = CAD, rows = [], porGrupo = {};
+  let soma = 0, mats = 0;
+  for (const m of D.ordMat){
       const b = m * nR, j = b + r, e = D.ent[j];
       if (!k[m] || !e) continue;
       const ci = D.cadI[m], eA = D.eA[j], cat = D.cat[j];
@@ -2231,17 +2234,71 @@ async function exportEntradas(){
       const comum = [T(MOVS[D.mv[j]]), D.hasE[b] ? Q[b] : 0, Q[j] - e, D.present[j - 1] ? Q[j - 1] : '', Q[j], e,
         D.ligMes[m] > 0 ? labels[D.ligMes[m]] : '', D.ecoNov[m] || '',
         D.present[b] ? 'SIM' : 'NÃO', D.hasE[b] ? 'Faturando em dez/25' : T(DG_NOME[dgDez(m)]), D.present[b] && D.grp[b] >= 0 ? D.grp[b] : '',
-        D.present[b] ? D.qa[b] : '', D.present[b] ? D.qe[b] : '', D.present[b] ? nf2.format(D.fa[b]) : '', D.present[b] ? nf2.format(D.fe[b]) : '',
-        ...FIELDS.map(f => cellVal(f.k, j, true)), T(CLS_NOME[D.cls[m]]), ...cad, listasDe(m)];
+        D.present[b] ? D.qa[b] : '', D.present[b] ? D.qe[b] : '', D.present[b] ? (xl ? { v: D.fa[b], s: XS.rs } : nf2.format(D.fa[b])) : '', D.present[b] ? (xl ? { v: D.fe[b], s: XS.rs } : nf2.format(D.fe[b])) : '',
+        ...FIELDS.map(f => xl ? valXl(f.k, j) : cellVal(f.k, j, true)), T(CLS_NOME[D.cls[m]]), ...cad, listasDe(m)];
       // a parte do grupo e a parte de aumento, cada uma na sua linha
       const pedacos = cat === G_AUM ? [[G_AUM, e]] : eA ? [[cat, e - eA], [G_AUM, eA]] : [[cat, e]];
       pedacos.forEach(([g, v], x) => {
         const conta = x === 0 && D.ligMes[m] === r;
-        chunk += [labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
-          D.pri[m] >= 0 ? labels[D.pri[m]] : '', motivo(m, g), grupoNome(g), v, conta ? 'SIM' : 'NÃO', ...comum].map(q).join(';') + '\r\n';
-        linhas++; soma += v; if (conta) mats++;
+        rows.push([labels[r], D.mats[m], D.nomes[m], D.dict.cid[D.cid[m]], D.dict.sub[D.sub[m]], D.dict.sl[D.sl[m]], D.dict.sc[D.sc[m]],
+          D.pri[m] >= 0 ? labels[D.pri[m]] : '', motivo(m, g), grupoNome(g), v, conta ? 'SIM' : 'NÃO', ...comum]);
+        soma += v; porGrupo[g] = (porGrupo[g] || 0) + v; if (conta) mats++;
       });
     }
+  return { rows, soma, mats, porGrupo };
+}
+// Base de justificativa (v1.42, pedido do usuário): Excel com a aba Resumo (economias novas de cada mês por grupo,
+// matrículas e o total do ano, iguais à linha do tempo), uma aba por mês com as entradas daquele mês e a aba
+// "Total 2026" com todas juntas. Cada linha é uma matrícula e um motivo; a coluna K (ECONOMIAS_ENTRADA) soma o painel.
+async function exportJustificativa(){
+  const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), o = fluxos(k), GRs = gruposAtivos(), S = T('esgoto');
+  bloqueia(true); prog(true, 'Gerando a base de justificativa', 'Montando as abas por mês…', 0);
+  const head = headEntradas(), cab = head.map(h => ({ v: h, s: XS.cab })), larg = head.map((h, i) => i === 2 ? 34 : i === 8 ? 30 : Math.min(28, Math.max(11, h.length * 0.9)));
+  const colK = colL(COL_ECO_ENTRADA), colMat = colL(COL_ECO_ENTRADA + 1);
+  const nomeAba = r => labels[r].replace('/', '-');
+  const abasMes = [], todas = [cab], conf = [];
+  for (let r = 1; r < nR; r++){
+    const ent = entradasDoMes(r, k, true);
+    abasMes.push({ nome: nomeAba(r), rows: [cab, ...ent.rows], freeze: 1, filtro: 1, cols: larg });
+    todas.push(...ent.rows);
+    conf.push({ r, ent });
+    prog(true, null, null, r / nR);
+    await new Promise(res => setTimeout(res));
+  }
+  // aba Resumo: valores do painel e a soma conferida em cada aba (fórmula)
+  const filtros = [st.cidSel ? `cidades: ${[...st.cidSel].map(i => D.dict.cid[i]).join(', ')}` : '', st.subSel ? `sub-categorias: ${[...st.subSel].map(i => D.dict.sub[i]).join(', ')}` : '',
+    st.soUlt && CADA ? 'só último contrato ativo' : '', aeLigado() ? 'só AGUA E ESGOTO' : ''].filter(Boolean).join('; ');
+  const R = [[{ v: `Economias novas faturando ${S} em 2026 — base de justificativa`, s: XS.tit }],
+    [{ v: `Gerado em ${new Date().toLocaleDateString('pt-BR')} pelo painel v${VERSAO_SITE}${filtros ? ' · filtros: ' + filtros : ' · sem filtros'}. Cada aba de mês lista as matrículas que somaram economias naquele mês; a soma da coluna ECONOMIAS_ENTRADA é o número do painel.`, s: XS.nota }],
+    [],
+    ['Mês', ...GRs.map(g => T(GRUPOS[g].eco)), 'Economias novas no mês (painel)', 'Soma na aba do mês (conferência)', 'Matrículas novas no mês', 'Linhas na aba'].map(v => ({ v, s: XS.cab }))];
+  const l0 = R.length + 1;
+  for (const { r, ent } of conf)
+    R.push([labels[r], ...GRs.map(g => ({ v: o.eC[g][r], s: XS.int })), { v: o.ent[r], s: XS.int },
+      { f: `SUM('${nomeAba(r)}'!${colK}:${colK})`, s: XS.int }, { v: o.lig[r], s: XS.int }, { v: ent.rows.length, s: XS.int }]);
+  const l1 = R.length, nc = GRs.length + 5;
+  R.push([{ v: 'Total 2026', s: XS.neg }, ...Array.from({ length: nc - 1 }, (_, i) => ({ f: `SUM(${colL(i + 1)}${l0}:${colL(i + 1)}${l1})`, s: XS.totInt }))]);
+  R.push([], [{ v: `Grupos: ${GRs.map(g => `${LEGENDA[g][0]} — ${LEGENDA[g][1]}`).join(' · ')}. Quem passa do limite do grupo no primeiro mês gera duas linhas (o grupo e o aumento). As regras completas estão na aba Dados do painel.`, s: XS.nota }]);
+  const resumo = { nome: 'Resumo', rows: R, cols: [16, ...GRs.map(() => 20), 22, 24, 20, 12] };
+  const total = { nome: 'Total 2026', rows: todas, freeze: 1, filtro: 1, cols: larg };
+  baixaXlsx([resumo, ...abasMes, total], `justificativa_${ARQ()}_${D.refs[nR - 1]}.xlsx`);
+  prog(false); bloqueia(false);
+  const soma = conf.reduce((a, c) => a + c.ent.soma, 0), mats = conf.reduce((a, c) => a + c.ent.mats, 0);
+  toast(`Base de justificativa: ${nf0.format(soma)} economias novas em ${nf0.format(mats)} matrículas, ${nf0.format(todas.length - 1)} linhas.`);
+}
+async function exportEntradas(){
+  const k = keepMask(), nR = D.refs.length, labels = D.refs.map(refLabel), mes = +$('#anMes').value;
+  const r0 = mes > 0 ? mes : 1, r1 = mes > 0 ? mes : nR - 1, Q = D.Q, C = CAD;
+  bloqueia(true); prog(true, 'Gerando as entradas com motivo', mes > 0 ? labels[mes] : 'todos os meses', 0);
+  const q = s => { s = String(s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = headEntradas();
+  const parts = ['\ufeff' + head.join(';') + '\r\n'];
+  let linhas = 0, soma = 0, mats = 0;
+  for (let r = r0; r <= r1; r++){
+    let chunk = '';
+    const ent = entradasDoMes(r, k, false);
+    for (const row of ent.rows) chunk += row.map(q).join(';') + '\r\n';
+    linhas += ent.rows.length; soma += ent.soma; mats += ent.mats;
     parts.push(chunk);
     prog(true, null, null, (r - r0 + 1) / (r1 - r0 + 1));
     await new Promise(res => setTimeout(res));
@@ -2579,6 +2636,7 @@ function renderDados(){
     ${li('<b>Entradas do mês (com motivo):</b> uma linha por matrícula e mês que somou economias, com MOTIVO — Nova na base (fora do cadastro ou Provisória), Recuperada, Passou a faturar esgoto ou Aumento de economias — e GRUPO; a situação da ligação no cadastro vem em SIT_LIG_CADASTRO_DEZ25, só para consulta. A soma de ECONOMIAS_ENTRADA no mês é o total do Resumo e CONTA_COMO_MATRICULA = SIM dá as matrículas. Quem volta com mais economias que o limite do grupo aparece em duas linhas: a do grupo e a do aumento. Traz também a situação na base em dez/25 (NA_BASE_DEZ25, DIAGNOSTICO_DEZ25, grupo, economias e R$ de água e esgoto), as colunas da base no mês (sufixo _MES), o teto antes do mês e todas as colunas do cadastro de dez/25.')}
     ${li('<b>Diagnóstico dos aumentos</b> (aba Dados, não muda nenhum número): por mês, quanto dos aumentos vem de mês com mais de um contrato, de economias do serviço maiores que o Eco_total, iguais às do outro serviço, de aumentos que voltam no mês seguinte, de quem já faturava em dez/25 ou entrou em 2026, e pelo tamanho do aumento; no mês escolhido, os maiores COD_GRUPO e cidades e a lista para baixar.')}
     ${li('<b>Diagnóstico das recuperadas</b> (topo desta aba, não muda nenhum número): abre as matrículas do grupo Recuperadas pela situação na base em dez/25 — ausente da base (a exportação só traz quem teve faturamento no mês, então não houve conta com Referência dez/25), só com o outro serviço faturado, com valor do serviço sem economias, ou com tudo zerado — e mostra essas economias por mês de entrada, por COD_GRUPO do mês de entrada, por cidade e pelo número de meses faturando em 2026, com a lista para baixar (economias do serviço mês a mês).')}
+    ${li('<b>Base de justificativa (Excel)</b> (v1.42, botão ao lado da base de metas): aba <b>Resumo</b> com as economias novas de cada mês por grupo, o total do mês (o mesmo da linha do tempo), a soma conferida na aba do mês (fórmula) e as matrículas novas; uma aba por mês com as entradas daquele mês (as mesmas colunas de “Entradas do mês (com motivo)”: uma linha por matrícula e motivo, e quem passa do limite do grupo gera a linha do grupo e a do aumento); e a aba <b>Total 2026</b> com todos os meses juntos. A soma de ECONOMIAS_ENTRADA de cada aba é o número do painel; CONTA_COMO_MATRICULA = SIM dá as matrículas. Respeita todos os filtros ligados.')}
     ${li('<b>Base de metas (Excel)</b> (botão ao lado do analítico): arquivo .xlsx com duas abas. <b>Resumo gerencial</b>: célula amarela para digitar a meta anual de economias novas; o % atingido, o que falta, a meta proporcional aos meses da base e o % acumulado de cada mês calculam sozinhos; mais as economias novas por mês e por grupo, as matrículas e o total por cidade. <b>Matrículas</b>: uma linha por matrícula que somou economias em 2026, com o mês e o motivo da entrada (nova, recuperada, passou a faturar esgoto ou aumento de quem já faturava), as economias da entrada, os meses e as economias de aumento, o total do ano e uma coluna por mês (NOVAS_<mês>), as colunas da base no mês da entrada e no último mês e os dados do cadastro. A soma de ECONOMIAS_NOVAS_2026 é o total do Resumo. Respeita os filtros de cidade e sub-categoria.')}
     ${li('<b>Analítico de movimentos:</b> com SOMA_NO_TOTAL = SIM, a soma de ECONOMIAS_CONTADAS dá as economias novas faturando do Resumo; ECONOMIAS_NO_GRUPO vai para o GRUPO da linha e ECONOMIAS_AUMENTO para os aumentos; CONTA_COMO_MATRICULA = SIM dá as matrículas novas faturando.')}
   </ol>`;
@@ -2654,6 +2712,7 @@ document.querySelectorAll('[data-painel]').forEach(b => b.onclick = () => showPa
 $('#btnAnalitico').onclick = () => { if (D && !rodando) ({ todas: exportTodas, entradas: exportEntradas }[$('#anTipo').value] || exportAnalitico)(); };
 $('#anTipo').onchange = () => { if (D) fillAnMes(); };
 $('#btnMetas').onclick = () => { if (D && !rodando) exportMetas(); };
+$('#btnJust').onclick = () => { if (D && !rodando) exportJustificativa(); };
 document.querySelectorAll('[data-ult]').forEach(b => b.onclick = () => {
   st.soUlt = b.dataset.ult === '1';
   document.querySelectorAll('[data-ult]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
