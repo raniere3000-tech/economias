@@ -258,7 +258,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.40</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.41</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -980,7 +980,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.40';
+const VERSAO_SITE = '1.41';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1196,14 +1196,22 @@ function usaCadAtual(c){
   if (c && c.mats && !(c.stats && c.stats.v >= 2)){ c = null; setTimeout(() => toast('Clique em ↻ Atualizar para reler o cadastro atual: o filtro agora usa também a SIT_CONTRATO.'), 500); }
   CADA = c && c.mats ? c : null;
   if (CADA) CADA.idx = new Map(CADA.mats.map((s, i) => [s, i]));
-  if (!CADA) st.soUlt = false;
-  if (!temTipoAtual()) st.soAe = false;
+  // v1.41 (pedido do usuário): com o cadastro atual, os dois filtros já começam ligados
+  // ("Só último contrato ativo" nos dois painéis e "Só AGUA E ESGOTO" no Esgoto); sem ele, ficam desligados
+  st.soUlt = !!CADA;
+  st.soAe = temTipoAtual();
+  sincTg();
   for (const k of Object.keys(DS)) if (DS[k]) marcaUlt(DS[k]);
   $('#tgUlt').hidden = !CADA; mostraTgAe();
 }
 // filtro "Só AGUA E ESGOTO" (v1.39): precisa do TIPO_FATURAMENTO no cadastro atual (lido pela v1.39 em diante) e vale só no painel Esgoto
 const temTipoAtual = () => !!(CADA && CADA.stats && CADA.stats.v >= 3 && CADA.stats.temTipo);
 const aeLigado = () => st.soAe && temTipoAtual() && D && D.servico === 'esgoto';
+// marca nos botões o estado dos dois filtros do cadastro atual
+function sincTg(){
+  for (const [attr, on] of [['ult', st.soUlt], ['ae', st.soAe]])
+    document.querySelectorAll(`[data-${attr}]`).forEach(x => { const a = (x.dataset[attr] === '1') === on; x.classList.toggle('active', a); x.setAttribute('aria-pressed', String(a)); });
+}
 function mostraTgAe(){ const el = $('#tgAe'); if (el) el.hidden = !(temTipoAtual() && st.painel === 'esgoto'); }
 const aeAtual = mk => { const i = CADA ? CADA.idx.get(mk) : undefined; return i !== undefined && (CADA.flag[i] & 8) ? 1 : 0; };
 // matrícula fora da base (listas, conferências): passa nos filtros do cadastro atual?
@@ -2562,7 +2570,7 @@ function renderDados(){
   <ol start="20">
     ${li('<b>Conferência com o cadastro</b> (Resumo): (a) fora do cadastro e faturando em dez/25; (b) economias do cadastro diferentes das faturadas em dez/25; (c) no cadastro sem faturar em dez/25, qualquer situação menos provisória (no esgoto, só as que têm AGUA E ESGOTO no cadastro). Desde a v1.31 não há conferência pela situação da ligação. Cada uma tem a lista para baixar.')}
     ${li('<b>Divergências</b> (Consolidado): economias do serviço diferentes do Eco_total, ou economias sem valor faturado do serviço, nos meses faturando.')}
-    ${li('<b>Filtros</b> de cidade e sub-categoria valem para todo o Resumo, o Consolidado e os downloads, pela cidade e sub-categoria mais recentes da matrícula. <b>Só último contrato ativo</b> (v1.37, regra ajustada na v1.38; botão ao lado dos filtros, desligado ao abrir; aparece quando a subpasta Cadastro tem o cadastro atual): na subpasta Cadastro, o arquivo com “dez” ou “2025” no nome é a foto de dez/25 (regras 8 a 13); o outro é o cadastro atual, que serve só para este filtro. Com o filtro ligado, só contam as matrículas que continuam na base hoje: no cadastro atual, a linha do último contrato (ULTIMO_CONTRATO = SIM) precisa estar com SIT_CONTRATO = ATIVO. As outras (último contrato encerrado, anulado, pendente ou cancelado) e as que não estão no cadastro atual saem inteiras, em todos os meses (dez/25 inclusive), como num filtro de cidade. As linhas NÃO do cadastro atual (contratos anteriores, por troca de titularidade) não entram na conta. <span class="ex">Ex.: matrícula que passou a faturar esgoto em mar/26 e hoje está com o último contrato ENCERRADO não conta; a que trocou de titular e tem o contrato novo ATIVO conta.</span> <b>Só AGUA E ESGOTO</b> (v1.39, só no painel Esgoto, outro botão, também desligado ao abrir): só contam as matrículas cujo último contrato (linha SIM) está com TIPO_FATURAMENTO = AGUA E ESGOTO no cadastro atual; as com AGUA e as fora do cadastro atual saem inteiras, em todos os meses. Serve para ver o saldo: das entradas de esgoto de 2026, quantas continuam com esgoto hoje. Pode ser usado junto com o de contrato ativo (valem os dois) e leva “_so_agua_e_esgoto” no nome dos downloads. Vale para indicadores, gráficos, linha do tempo, Consolidado, conferências, listas e todos os downloads, nos dois painéis; com ele ligado, o rodapé avisa e os arquivos baixados levam “_so_contrato_ativo” no nome.' + (CADA ? ` Cadastro atual: ${nf0.format(CADA.mats.length)} matrículas, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 1 ? 1 : 0), 0))} com último contrato (SIM), ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 4 ? 1 : 0), 0))} com o último contrato ATIVO` + (temTipoAtual() ? `, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 8 ? 1 : 0), 0))} com o último contrato AGUA E ESGOTO.` : '. Clique em ↻ Atualizar para ler o TIPO_FATURAMENTO e liberar o filtro “Só AGUA E ESGOTO”.') : ''))}
+    ${li('<b>Filtros</b> de cidade e sub-categoria valem para todo o Resumo, o Consolidado e os downloads, pela cidade e sub-categoria mais recentes da matrícula. <b>Só último contrato ativo</b> (v1.37, regra ajustada na v1.38; botão ao lado dos filtros, ligado ao abrir desde a v1.41; aparece quando a subpasta Cadastro tem o cadastro atual): na subpasta Cadastro, o arquivo com “dez” ou “2025” no nome é a foto de dez/25 (regras 8 a 13); o outro é o cadastro atual, que serve só para este filtro. Com o filtro ligado, só contam as matrículas que continuam na base hoje: no cadastro atual, a linha do último contrato (ULTIMO_CONTRATO = SIM) precisa estar com SIT_CONTRATO = ATIVO. As outras (último contrato encerrado, anulado, pendente ou cancelado) e as que não estão no cadastro atual saem inteiras, em todos os meses (dez/25 inclusive), como num filtro de cidade. As linhas NÃO do cadastro atual (contratos anteriores, por troca de titularidade) não entram na conta. <span class="ex">Ex.: matrícula que passou a faturar esgoto em mar/26 e hoje está com o último contrato ENCERRADO não conta; a que trocou de titular e tem o contrato novo ATIVO conta.</span> <b>Só AGUA E ESGOTO</b> (v1.39, só no painel Esgoto, outro botão, também ligado ao abrir desde a v1.41): só contam as matrículas cujo último contrato (linha SIM) está com TIPO_FATURAMENTO = AGUA E ESGOTO no cadastro atual; as com AGUA e as fora do cadastro atual saem inteiras, em todos os meses. Serve para ver o saldo: das entradas de esgoto de 2026, quantas continuam com esgoto hoje. Pode ser usado junto com o de contrato ativo (valem os dois) e leva “_so_agua_e_esgoto” no nome dos downloads. Vale para indicadores, gráficos, linha do tempo, Consolidado, conferências, listas e todos os downloads, nos dois painéis; com ele ligado, o rodapé avisa e os arquivos baixados levam “_so_contrato_ativo” no nome.' + (CADA ? ` Cadastro atual: ${nf0.format(CADA.mats.length)} matrículas, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 1 ? 1 : 0), 0))} com último contrato (SIM), ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 4 ? 1 : 0), 0))} com o último contrato ATIVO` + (temTipoAtual() ? `, ${nf0.format(CADA.flag.reduce((a, f) => a + (f & 8 ? 1 : 0), 0))} com o último contrato AGUA E ESGOTO.` : '. Clique em ↻ Atualizar para ler o TIPO_FATURAMENTO e liberar o filtro “Só AGUA E ESGOTO”.') : ''))}
   </ol>
 
   <h2>7. Downloads</h2>
