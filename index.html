@@ -184,6 +184,11 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .dados .ex{color:var(--azul-claro);font-size:12.5px}
 .dados table{max-width:760px;margin:6px 0 10px}
 .dados p.nota-secao{max-width:none}
+/* premissas em linguagem simples no topo da aba Dados (v1.43, mesmo modelo do painel de arrecadação) */
+.dados .premissas{border-bottom:2px solid var(--linha);padding-bottom:14px;margin-bottom:18px}
+.dados .premissas h3{margin:16px 0 2px;font-size:14px;color:var(--marinho);border-bottom:1px solid var(--linha);padding-bottom:3px}
+.dados .premissas p.intro{font-size:13.5px;color:#1e293b;line-height:1.5;margin:4px 0 6px;max-width:900px}
+.dados .premissas ol{max-width:900px}
 .tab-seg tr.linha-total td{background:var(--tint);border-top:1.5px solid var(--azul);font-weight:700;color:var(--marinho)}
 .tab-seg td.tot{font-weight:700;color:var(--marinho);background:var(--zebra)}
 .tab-seg td.info{color:var(--laranja-texto)}
@@ -258,7 +263,7 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
     <div class="header-linha">
       <span class="header-badge" id="badge">Águas do Rio · Esgoto</span>
       <h1 id="titulo">Entradas de economias de esgoto 2026</h1>
-      <span class="versao" id="versao" title="Versão do painel">v1.42</span>
+      <span class="versao" id="versao" title="Versão do painel">v1.43</span>
       <p class="status" id="status">Nenhuma base carregada</p>
     </div>
     <div class="acoes">
@@ -981,7 +986,7 @@ self.onmessage = async ev => {
 (() => {
 'use strict';
 // Aumente a versão a cada atualização publicada, para identificar a versão em uso e poder voltar à anterior
-const VERSAO_SITE = '1.42';
+const VERSAO_SITE = '1.43';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = 'v' + VERSAO_SITE;
 const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -2552,6 +2557,66 @@ function htmlAbas(){
 }
 /* ---------- aba Dados: as regras usadas no painel ----------
    Toda mudança de regra ou de cálculo tem de ser escrita aqui também, na mesma versão (pedido do usuário). */
+// Premissas (v1.43, pedido do usuário, no modelo da aba Dados do painel de duplicidades da arrecadação): o trabalho
+// explicado em linguagem simples, em itens numerados por tema, com os números atuais do painel aberto e exemplos.
+function htmlPremissas(){
+  if (!D) return '';
+  const S = T('esgoto'), esg = D.servico === 'esgoto', k = keepMask(), o = fluxos(k), nR = D.refs.length, labels = D.refs.map(refLabel);
+  const GRs = gruposAtivos(), tot = sumFrom1(o.ent), mats = sumFrom1(o.lig), C = CAD;
+  const ex = t => ` <span class="ex">Exemplo: ${t}</span>`, li = t => `<li>${t}</li>`;
+  let n = 1; const P = (titulo, itens) => { const h = `<h3>${titulo}</h3><ol start="${n}">${itens.map(li).join('')}</ol>`; n += itens.length; return h; };
+  const grupoTxt = GRs.map(g => `${nf0.format(sumFrom1(o.eC[g]))} ${GR_NOME[g].toLowerCase()}`).join(', ');
+  const filtrosOn = [st.soUlt && CADA ? 'Só último contrato ativo' : '', aeLigado() ? 'Só AGUA E ESGOTO' : '', st.cidSel ? 'Cidade' : '', st.subSel ? 'Sub-categoria' : ''].filter(Boolean);
+  return `<div class="premissas">
+    <h2>Premissas: como o resultado é feito</h2>
+    <p class="intro">Resumo, em linguagem simples, de como o painel chega ao número de economias novas faturando ${S} em 2026 (painel ${esg ? 'Esgoto' : 'Água'}). A numeração serve para citar a premissa ao explicar o material. Os números abaixo são os do painel aberto agora, com os filtros ligados${filtrosOn.length ? ` (${filtrosOn.join(', ')})` : ' (nenhum)'}. O detalhe técnico, com os nomes das colunas, fica mais abaixo nesta aba.</p>
+    ${P('O que é analisado', [
+      `<b>Cada matrícula é acompanhada mês a mês</b>, de ${labels[0]} a ${labels[nR - 1]}, na base do BI (${esc(D.meta && D.meta.arquivos ? D.meta.arquivos.join(', ') : 'base carregada')}): ${nf0.format(D.mats.length)} matrículas. Em cada mês, o painel olha quantas economias de ${S} a matrícula faturou.`,
+      `<b>Dezembro de 2025 é o ponto de partida.</b> Em ${labels[0]}, ${nf0.format(o.ligTot[0])} matrículas faturavam ${nf0.format(o.ecoTot[0])} economias de ${S}. Tudo o que é medido em 2026 é comparado com essa foto.`,
+      `<b>Cada matrícula conta uma vez por mês</b>, mesmo que tenha mais de uma linha no mês (por exemplo, numa troca de titularidade, o contrato antigo e o novo). Vale o maior número de economias entre as linhas; o faturamento (R$) é somado.${ex('o contrato antigo faturou 2 economias e o novo, 2, no mesmo mês: a matrícula faturou 2 economias, não 4.')}`,
+      `<b>As economias do mês nunca passam do total de economias da ligação</b> (Eco_total). Quando duas contas saem no mesmo mês, o sistema conta as economias duas vezes; o painel corta esse excesso para não criar um aumento que não existiu.${ex('ligação com 3 economias que teve duas contas em outubro aparece com 6; o painel considera 3.')}`,
+      `<b>Dois cadastros ajudam a classificar.</b> O cadastro de dez/25${C ? ` (${nf0.format(C.mats.length)} matrículas)` : ' (não carregado)'} diz se a matrícula já existia na base. O cadastro atual${CADA ? ` (${nf0.format(CADA.mats.length)} matrículas)` : ' (não carregado)'} diz se ela continua ativa hoje${esg ? ' e se fatura água e esgoto' : ''}.`,
+    ])}
+    ${P('O que conta como economia nova', [
+      `<b>Só conta o que passa do maior número de economias que a matrícula já faturou.</b> Para quem faturava em dez/25, o ponto de partida é o que faturou em dez/25; para quem não faturava, é zero. Cada vez que a matrícula passa desse número, a diferença soma e o novo número vira a referência.${ex('3 economias em dez/25 → 5 em março (soma 2) → corte em abril (0) → volta com 5 em maio (não soma) → 6 em junho (soma 1). Total: 3 economias novas.')}`,
+      `<b>Cortada e religada não conta de novo.</b> Quem para de faturar e volta com as mesmas economias não soma, porque não passou do que já tinha faturado.`,
+      `<b>Quem deixou de faturar não é descontado.</b> As saídas aparecem no painel só para conhecimento (em laranja); o total do ano é a soma das entradas de cada mês.`,
+    ])}
+    ${P('Em qual grupo cada economia nova entra', [
+      ...GRs.map(g => `<b>${esc(LEGENDA[g][0])}</b> — ${esc(LEGENDA[g][1])}.` + ({
+        [G_NOVA]: ' Entra aqui quem não estava no cadastro de dez/25 (ou estava como ligação provisória).',
+        [G_RECUP]: ` Entra aqui quem estava no cadastro de dez/25, em qualquer situação (ativa, cortada, inativa…), mas não faturou ${S} em dez/25. Conta como recuperada até o número de economias do cadastro; o que passar disso é aumento.${ex('cadastro com 2 economias, volta faturando 5: 2 recuperadas + 3 de aumento.')}`,
+        [G_ESG]: ` Entra aqui quem faturava só água em dez/25 e passou a faturar também esgoto. Conta até as economias que já tinha; o que passar é aumento.`,
+        [G_AUM]: ` Entra aqui o que passa do maior número já faturado em quem já faturava, e também nas novas e recuperadas depois do primeiro mês.${ex('faturava 8 em dez/25 e passa a 10: 2 de aumento.')}`,
+        [G_REC]: ' Usado só quando o cadastro de dez/25 não está carregado.'
+      }[g] || '')),
+      `<b>Hoje o total é ${nf0.format(tot)} economias novas faturando ${S}</b>: ${grupoTxt}.`,
+    ])}
+    ${P('Como as matrículas são contadas', [
+      `<b>Cada matrícula conta uma vez no ano</b>, no primeiro mês em que soma economias novas, e no grupo dessa primeira entrada. Hoje são ${nf0.format(mats)} matrículas novas faturando.`,
+      `<b>Matrículas que deixaram de faturar</b> (só para conhecimento): faturavam no mês anterior e ficaram sem economias faturadas no mês. No total do ano, cada uma conta uma vez (${nf0.format(o.saiMAno)} hoje).`,
+    ])}
+    ${P('Filtros que mudam o resultado', [
+      `<b>Só último contrato ativo</b> (ligado ao abrir): conta só as matrículas cujo contrato mais recente está ATIVO no cadastro atual — as entradas que permaneceram na base. As que encerraram o contrato depois de entrar saem de todos os meses.${CADA ? ` Hoje: ${st.soUlt ? 'ligado' : 'desligado'}; ${nf0.format(D.ultOk ? D.ultOk.reduce((a, b) => a + b, 0) : 0)} matrículas da base passam nesse filtro.` : ' Sem cadastro atual carregado, o filtro não aparece.'}`,
+      ...(esg ? [`<b>Só AGUA E ESGOTO</b> (só no painel Esgoto, ligado ao abrir): conta só as matrículas que hoje estão com o tipo de faturamento AGUA E ESGOTO no cadastro atual — o saldo das entradas que continuam faturando esgoto.${temTipoAtual() ? ` Hoje: ${st.soAe ? 'ligado' : 'desligado'}; ${nf0.format(D.aeOk ? D.aeOk.reduce((a, b) => a + b, 0) : 0)} matrículas da base passam nesse filtro.` : ''}`] : []),
+      `<b>Cidade e sub-categoria</b>: limitam todos os números às matrículas escolhidas, pela cidade e sub-categoria mais recentes da matrícula.`,
+      `<b>Os filtros valem para tudo</b>: indicadores, gráficos, linha do tempo, Consolidado e todos os arquivos baixados (que levam o filtro no nome).`,
+    ])}
+    ${P('Faturamento', [
+      `<b>Faturamento das economias novas</b>: de quem não faturava ${S} em dez/25, todo o faturamento de ${S} a partir do mês em que passou a faturar; de quem já faturava e aumentou, só a parte proporcional às economias a mais.${ex('fatura R$ 100 com 10 economias e tinha 8 em dez/25: entram R$ 20.')}`,
+      `<b>Faturamento existente</b> = faturamento de ${S} do mês menos o das economias novas.`,
+    ])}
+    ${P('Como conferir os números', [
+      `<b>Base de justificativa (Excel)</b>, no cartão das economias por mês: uma aba por mês com as matrículas que entraram e o motivo. A soma da coluna ECONOMIAS_ENTRADA de cada aba é o número do mês no painel; a aba Resumo traz essa conferência pronta.`,
+      `<b>Consolidado</b>: mostra cada matrícula mês a mês, com as economias e o faturamento de cada referência, para ver o caso de perto.`,
+    ])}
+    ${P('Cuidados e limites', [
+      `<b>O tipo de faturamento da base do BI é o de hoje</b>, não o de cada mês, por isso não entra na conta mês a mês; o que vale é o número de economias faturadas.`,
+      `<b>Os números dependem dos arquivos da pasta.</b> Mês repetido em duas abas ou arquivos gera um aviso no Resumo, porque dobraria o faturamento.`,
+      `<b>Privacidade:</b> os arquivos são lidos só no computador de quem usa o painel; nada é enviado para a internet.`,
+    ])}
+  </div>`;
+}
 function renderDados(){
   const C = CAD, li = x => `<li>${x}</li>`;
   const arq = (nome, d) => d && d.meta ? `<li><b>${nome}:</b> ${esc(d.meta.arquivos.join(', '))} (lido em ${new Date(d.meta.carregadoEm).toLocaleDateString('pt-BR')})</li>` : `<li><b>${nome}:</b> não carregado</li>`;
@@ -2563,9 +2628,9 @@ function renderDados(){
       [...cont].sort((a, b) => b[1].n - a[1].n).map(([t, x]) => `<tr><td>${esc(t)}</td><td>${nf0.format(x.n)}</td><td>${nf0.format(x.e)}</td><td>${GR_NOME[x.g]}</td></tr>`).join('') + '</tbody></table>' +
       (Object.keys(C.stats.outras || {}).length ? `<p class="nota-secao">Outras situações no cadastro (contam como recuperadas, como qualquer situação que não seja provisória): ${esc(Object.keys(C.stats.outras).join(', '))}.</p>` : '');
   }
-  $('#dadosRegras').innerHTML = `
-  <h2>Regras do painel · versão ${VERSAO_SITE}</h2>
-  <p class="nota-secao">Como cada número é calculado e o que entra em cada conta. As regras valem para os painéis Esgoto e Água (trocando as colunas de esgoto pelas de água) e valem para a base do estudo (os números do BI). Esta página muda junto com qualquer ajuste de regra.</p>
+  $('#dadosRegras').innerHTML = htmlPremissas() + `
+  <h2>Regras do painel (detalhe técnico) · versão ${VERSAO_SITE}</h2>
+  <p class="nota-secao">O mesmo conteúdo das premissas acima, com os nomes das colunas e os detalhes de cada conta. As regras valem para os painéis Esgoto e Água (trocando as colunas de esgoto pelas de água) e valem para a base do estudo (os números do BI). Esta página muda junto com qualquer ajuste de regra.</p>
 
   <h2>Arquivos em uso</h2>
   <ul>${arq('Cadastro de dez/25', C)}${arq('Cadastro atual (filtro de último contrato ativo)', CADA)}${arq('Base do estudo · esgoto', DS.esgoto)}${arq('Base do estudo · água', DS.agua)}</ul>
